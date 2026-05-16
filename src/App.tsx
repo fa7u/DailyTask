@@ -18,6 +18,7 @@ import {
   ArrowUpDown,
   Pencil,
   Repeat,
+  Delete,
 } from 'lucide-react';
 import {
   BarChart,
@@ -223,6 +224,24 @@ export default function App() {
     setCategoryInput(CATEGORIES[0]);
     setCurrencyInput(CURRENCIES[0].code);
     setCustomCategory('');
+  };
+
+  const handleNumpad = (val: string) => {
+    if (val === 'backspace') {
+      setPriceInput(prev => prev.slice(0, -1));
+    } else if (val === '.') {
+      if (!priceInput.includes('.')) {
+        setPriceInput(prev => (prev === '' ? '0.' : prev + '.'));
+      }
+    } else {
+      if (priceInput.length >= 12) return;
+      setPriceInput(prev => (prev === '0' ? val : prev + val));
+    }
+  };
+
+  const handleQuickAdd = (amount: number) => {
+    const current = parseFloat(priceInput) || 0;
+    setPriceInput((current + amount).toString());
   };
 
   const filteredTasks = useMemo(() => {
@@ -777,65 +796,99 @@ export default function App() {
               initial={{ scale: 0.9, opacity: 0, y: 40 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 40 }}
-              className="bg-white w-full max-w-sm rounded-[40px] p-8 shadow-2xl relative z-10 border border-[#f0f0e8]"
+              className="bg-white w-full max-w-sm rounded-[40px] p-6 shadow-2xl relative z-10 border border-[#f0f0e8] max-h-[90vh] overflow-y-auto scrollbar-hide"
             >
-              <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-[#f5f5f0] rounded-full flex items-center justify-center mb-6">
-                   <Wallet className="w-8 h-8 text-[#5a5a40]" />
+              <div className="flex flex-col items-center">
+                <div className="flex items-center justify-between w-full mb-4">
+                  <div className="w-10 h-10 bg-[#f5f5f0] rounded-full flex items-center justify-center">
+                    <Wallet className="w-5 h-5 text-[#5a5a40]" />
+                  </div>
+                  <h3 className="text-lg font-black text-[#2d2d2a]">
+                    {tasks.find(t => t.id === showPriceModal.taskId)?.status === 'completed' ? 'تعديل السعر' : 'تسجيل المصروف'}
+                  </h3>
+                  <button 
+                    onClick={() => setShowPriceModal({ isOpen: false, taskId: null })}
+                    className="p-2 hover:bg-[#f5f5f0] rounded-full text-[#8a8a7c] transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                <h3 className="text-2xl font-bold text-[#2d2d2a] mb-2">
-                  {tasks.find(t => t.id === showPriceModal.taskId)?.status === 'completed' ? 'تعديل التفاصيل' : 'كم كان السعر؟'}
-                </h3>
-                <p className="text-[#8a8a7c] text-sm mb-8 leading-relaxed max-w-[240px]">
-                  {tasks.find(t => t.id === showPriceModal.taskId)?.status === 'completed' 
-                    ? 'قم بتحديث السعر أو الفئة لهذه المهمة' 
-                    : 'أدخل تفاصيل التكلفة والفئة لحفظ هذا السجل'}
-                </p>
                 
-                <div className="w-full space-y-6 mb-8">
+                <div className="w-full space-y-5">
                   {/* Currency Selector */}
                   <div className="flex bg-[#f5f5f0] p-1 rounded-2xl gap-1">
                     {CURRENCIES.map((c) => (
                       <button
                         key={c.code}
                         onClick={() => setCurrencyInput(c.code)}
-                        className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black transition-all ${
                           currencyInput === c.code 
                             ? 'bg-white text-[#5a5a40] shadow-sm' 
                             : 'text-[#8a8a7c] hover:text-[#6b6b60]'
                         }`}
                       >
-                        {c.code} ({c.label})
+                        {c.code}
                       </button>
                     ))}
                   </div>
 
-                  {/* Price Input */}
-                  <div className="bg-[#f8f8f5] p-6 rounded-3xl relative focus-within:ring-2 focus-within:ring-[#5a5a40] transition-all">
-                    <div className="absolute right-6 top-1/2 -translate-y-1/2 text-lg font-bold text-[#8a8a7c]">
+                  {/* Price Display */}
+                  <div className="bg-[#fdfcfb] border-2 border-[#f0f0e8] p-5 rounded-[28px] relative focus-within:border-[#5a5a40] transition-all group">
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-black text-[#8a8a7c]">
                       {currencyInput}
                     </div>
-                    <input 
-                      autoFocus
-                      type="number" 
-                      placeholder="0.00"
-                      value={priceInput}
-                      onChange={(e) => setPriceInput(e.target.value)}
-                      className="w-full text-center text-4xl font-black text-[#5a5a40] placeholder:text-[#e5e5df] outline-none bg-transparent"
-                    />
+                    <div className="w-full text-center text-4xl font-black text-[#5a5a40] h-10 flex items-center justify-center overflow-hidden">
+                      {priceInput || <span className="text-[#e5e5df]">0</span>}
+                      <motion.div 
+                        animate={{ opacity: [1, 0] }}
+                        transition={{ repeat: Infinity, duration: 0.8 }}
+                        className="w-[2px] h-8 bg-[#5a5a40] ml-1"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Increment Buttons */}
+                  <div className="grid grid-cols-4 gap-2">
+                    {[100, 500, 1000, 5000].map((amount) => (
+                      <button
+                        key={amount}
+                        onClick={() => handleQuickAdd(amount)}
+                        className="py-2.5 bg-[#f5f5f0] hover:bg-[#5a5a40] hover:text-white text-[#5a5a40] rounded-xl text-[10px] font-black transition-all active:scale-95 border border-[#e5e5df]"
+                      >
+                        +{amount.toLocaleString('ar-EG')}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom Numpad */}
+                  <div className="grid grid-cols-3 gap-2 bg-[#f8f8f5] p-2 rounded-[32px] border border-[#f0f0e8]">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'].map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => handleNumpad(key)}
+                        className={`h-14 flex items-center justify-center rounded-2xl text-xl font-black transition-all active:scale-90 ${
+                          key === 'backspace' 
+                            ? 'text-red-400 bg-white hover:bg-red-50' 
+                            : 'text-[#2d2d2a] bg-white hover:bg-[#f5f5f0] shadow-sm'
+                        }`}
+                      >
+                        {key === 'backspace' ? <Delete className="w-6 h-6" /> : key}
+                      </button>
+                    ))}
                   </div>
 
                   {/* Category Selection */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-[10px] font-bold text-[#8a8a7c] uppercase tracking-wider px-2">
-                       اختيار الفئة
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-[9px] font-black text-[#8a8a7c] uppercase tracking-widest px-2">
+                       <Tag className="w-3 h-3" />
+                       الفئة
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {CATEGORIES.map((cat) => (
                         <button
                           key={cat}
                           onClick={() => setCategoryInput(cat)}
-                          className={`py-3 px-2 rounded-2xl text-[11px] font-bold transition-all border ${
+                          className={`py-3 px-2 rounded-2xl text-[10px] font-black transition-all border ${
                             categoryInput === cat 
                               ? 'bg-[#5a5a40] text-white border-[#5a5a40] shadow-md' 
                               : 'bg-white text-[#6b6b60] border-[#f0f0e8] hover:bg-[#f5f5f0]'
@@ -848,14 +901,14 @@ export default function App() {
 
                     {categoryInput === 'أخرى' && (
                       <motion.div 
-                        initial={{ opacity: 0, scale: 0.9 }}
+                        initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="bg-[#f8f8f5] p-1 rounded-3xl border border-[#f0f0e8]"
+                        className="bg-[#f8f8f5] p-1 rounded-2xl border border-[#f0f0e8]"
                       >
                         <input 
                           type="text"
-                          placeholder="اكتب اسم الفئة (اختياري)..."
-                          className="w-full bg-transparent px-4 py-3 outline-none text-center font-bold text-[#5a5a40] placeholder:text-[#8a8a7c]/40 text-sm"
+                          placeholder="اسم الفئة الجديدة..."
+                          className="w-full bg-transparent px-4 py-3 outline-none text-center font-bold text-[#5a5a40] placeholder:text-[#8a8a7c]/40 text-xs"
                           value={customCategory}
                           onChange={(e) => setCustomCategory(e.target.value)}
                         />
@@ -864,20 +917,19 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex gap-4 w-full">
+                <div className="mt-8 grid grid-cols-2 gap-3 w-full">
+                  <button 
+                    onClick={() => setShowPriceModal({ isOpen: false, taskId: null })}
+                    className="bg-[#f5f5f0] text-[#6b6b60] font-black py-4 rounded-2xl hover:bg-[#ecece4] transition-colors text-sm"
+                  >
+                    إلغاء
+                  </button>
                   <button 
                     id="save-price-btn"
                     onClick={handleComplete}
-                    className="flex-1 bg-[#5a5a40] hover:opacity-90 text-white font-bold py-5 rounded-2xl transition-all shadow-lg shadow-[#5a5a40]/20 active:scale-95 text-lg"
+                    className="bg-[#5a5a40] hover:opacity-95 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-[#5a5a40]/20 active:scale-95 text-sm"
                   >
-                    {tasks.find(t => t.id === showPriceModal.taskId)?.status === 'completed' ? 'حفظ التعديلات' : 'حفظ وإكمال'}
-                  </button>
-                  <button 
-                    id="cancel-modal"
-                    onClick={() => setShowPriceModal({ isOpen: false, taskId: null })}
-                    className="flex-1 bg-[#ecece4] text-[#6b6b60] font-bold py-5 rounded-2xl hover:bg-[#e5e5df] transition-colors text-lg"
-                  >
-                    إلغاء
+                    {tasks.find(t => t.id === showPriceModal.taskId)?.status === 'completed' ? 'تحديث' : 'تأكيد الحفظ'}
                   </button>
                 </div>
               </div>
