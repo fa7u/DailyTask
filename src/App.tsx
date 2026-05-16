@@ -12,6 +12,12 @@ import {
   Wallet,
   Tag,
   BarChart3,
+  Search,
+  SlidersHorizontal,
+  ChevronDown,
+  ArrowUpDown,
+  Pencil,
+  Repeat,
 } from 'lucide-react';
 import {
   BarChart,
@@ -56,7 +62,7 @@ const COLORS = ['#5a5a40', '#8a8a7c', '#c4c4bc', '#ecece4'];
 
 const CURRENCIES = [
   { code: 'ر.ي', label: 'ريال يمني' },
-  { code: 'ر.س', label: 'ريال سعودي' },
+  { code: '⃁', label: 'ريال سعودي' },
   { code: '$', label: 'دولار' }
 ];
 
@@ -87,6 +93,14 @@ export default function App() {
   const [currencyInput, setCurrencyInput] = useState(CURRENCIES[0].code);
   const [analyticsCurrency, setAnalyticsCurrency] = useState(CURRENCIES[0].code);
   const [customCategory, setCustomCategory] = useState('');
+
+  // --- Filtering States ---
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('الكل');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'price-high' | 'price-low'>('newest');
+  const [showFilters, setShowFilters] = useState(false);
 
   // 1. Save to Local Storage and Sync to Server
   useEffect(() => {
@@ -137,6 +151,17 @@ export default function App() {
     }
   };
 
+  const duplicateTask = (task: Task) => {
+    const newTask: Task = {
+      id: Math.random().toString(36).substr(2, 9),
+      text: task.text,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    setTasks(prev => [newTask, ...prev]);
+    // Optional: show a small toast or notification if available
+  };
+
   const postponeTask = (id: string) => {
     setTasks(tasks.map(t => 
       t.id === id ? { ...t, status: 'postponed', date: new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' }) } : t
@@ -155,6 +180,23 @@ export default function App() {
   };
 
   const openCompleteModal = (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (task && task.status === 'completed') {
+      setPriceInput(task.price?.toString() || '');
+      setCurrencyInput(task.currency || CURRENCIES[0].code);
+      if (CATEGORIES.includes(task.category || '')) {
+        setCategoryInput(task.category || CATEGORIES[0]);
+        setCustomCategory('');
+      } else {
+        setCategoryInput('أخرى');
+        setCustomCategory(task.category || '');
+      }
+    } else {
+      setPriceInput('');
+      setCategoryInput(CATEGORIES[0]);
+      setCurrencyInput(CURRENCIES[0].code);
+      setCustomCategory('');
+    }
     setShowPriceModal({ isOpen: true, taskId: id });
   };
 
@@ -171,7 +213,7 @@ export default function App() {
             price,
             currency: currencyInput,
             category: finalCategory,
-            date: new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' }) 
+            date: t.status === 'completed' ? t.date : new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' }) 
           } 
         : t
     ));
@@ -183,19 +225,50 @@ export default function App() {
     setCustomCategory('');
   };
 
-  const filteredTasks = tasks.filter(t => t.status === activeTab);
+  const filteredTasks = useMemo(() => {
+    let result = tasks.filter(t => t.status === activeTab);
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(t => t.text.toLowerCase().includes(q) || t.category?.toLowerCase().includes(q));
+    }
+
+    // Category filter
+    if (filterCategory !== 'الكل') {
+      result = result.filter(t => t.category === filterCategory);
+    }
+
+    // Price range filter
+    if (minPrice) {
+      result = result.filter(t => (t.price || 0) >= parseFloat(minPrice));
+    }
+    if (maxPrice) {
+      result = result.filter(t => (t.price || 0) <= parseFloat(maxPrice));
+    }
+
+    // Sorting
+    result.sort((a, b) => {
+      if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (sortBy === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (sortBy === 'price-high') return (b.price || 0) - (a.price || 0);
+      if (sortBy === 'price-low') return (a.price || 0) - (b.price || 0);
+      return 0;
+    });
+
+    return result;
+  }, [tasks, activeTab, searchQuery, filterCategory, minPrice, maxPrice, sortBy]);
   
   // Group tasks by date
   const groupedTasks = useMemo(() => {
     const groups: Record<string, Task[]> = {};
-    const list = tasks.filter(t => t.status === activeTab);
-    list.forEach(task => {
+    filteredTasks.forEach(task => {
       const dateKey = task.date || new Date(task.createdAt).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' });
       if (!groups[dateKey]) groups[dateKey] = [];
       groups[dateKey].push(task);
     });
     return groups;
-  }, [tasks, activeTab]);
+  }, [filteredTasks]);
 
   // Calculate total expenses from completed tasks (grouped by currency)
   const totalsByCurrency = useMemo(() => {
@@ -382,6 +455,132 @@ export default function App() {
           </motion.div>
         )}
 
+        {/* Search and Filters */}
+        {activeTab !== 'analytics' && (
+          <div className="mb-6 space-y-4">
+            <div className="flex gap-3">
+              <div className="flex-1 bg-white border border-[#f0f0e8] rounded-2xl flex items-center px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-[#5a5a40]/20 transition-all">
+                <Search className="w-5 h-5 text-[#8a8a7c] ml-3" />
+                <input 
+                  type="text" 
+                  placeholder="ابحث في قائمة المشتريات..."
+                  className="flex-1 bg-transparent outline-none text-sm font-medium placeholder:text-[#8a8a7c]/40"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="p-1 hover:bg-[#f5f5f0] rounded-lg text-[#8a8a7c]">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-2 px-5 rounded-2xl font-bold text-sm transition-all border ${
+                  showFilters 
+                    ? 'bg-[#5a5a40] text-white border-[#5a5a40] shadow-lg shadow-[#5a5a40]/20' 
+                    : 'bg-white text-[#6b6b60] border-[#f0f0e8] hover:bg-[#f5f5f0]'
+                }`}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                تصفية
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {showFilters && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="bg-[#f8f8f5] border border-[#f0f0e8] rounded-[24px] p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Sorting */}
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-[#8a8a7c] uppercase tracking-widest flex items-center gap-2 px-1">
+                          <ArrowUpDown className="w-3.5 h-3.5" />
+                          ترتيب حسب
+                        </label>
+                        <select 
+                          className="w-full bg-white border border-[#e5e5df] rounded-xl px-4 py-3 text-sm font-bold text-[#5a5a40] outline-none appearance-none"
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value as any)}
+                        >
+                          <option value="newest">الأحدث أولاً</option>
+                          <option value="oldest">الأقدم أولاً</option>
+                          <option value="price-high">الأعلى سعراً</option>
+                          <option value="price-low">الأقل سعراً</option>
+                        </select>
+                      </div>
+
+                      {/* Category Filter */}
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-[#8a8a7c] uppercase tracking-widest flex items-center gap-2 px-1">
+                          <Tag className="w-3.5 h-3.5" />
+                          الفئة
+                        </label>
+                        <select 
+                          className="w-full bg-white border border-[#e5e5df] rounded-xl px-4 py-3 text-sm font-bold text-[#5a5a40] outline-none appearance-none"
+                          value={filterCategory}
+                          onChange={(e) => setFilterCategory(e.target.value)}
+                        >
+                          <option value="الكل">كل الفئات</option>
+                          {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                          {/* Dynamically add other unique categories found in tasks */}
+                          {Array.from(new Set(tasks.map(t => t.category).filter(Boolean) as string[])).map(cat => (
+                            !CATEGORIES.includes(cat) && <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Price Range */}
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-[#8a8a7c] uppercase tracking-widest flex items-center gap-2 px-1">
+                          <Wallet className="w-3.5 h-3.5" />
+                          نطاق السعر
+                        </label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="number" 
+                            placeholder="من"
+                            className="w-full bg-white border border-[#e5e5df] rounded-xl px-4 py-3 text-sm font-bold text-[#5a5a40] outline-none placeholder:text-[#8a8a7c]/40"
+                            value={minPrice}
+                            onChange={(e) => setMinPrice(e.target.value)}
+                          />
+                          <input 
+                            type="number" 
+                            placeholder="إلى"
+                            className="w-full bg-white border border-[#e5e5df] rounded-xl px-4 py-3 text-sm font-bold text-[#5a5a40] outline-none placeholder:text-[#8a8a7c]/40"
+                            value={maxPrice}
+                            onChange={(e) => setMaxPrice(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-start">
+                      <button 
+                        onClick={() => {
+                          setSearchQuery('');
+                          setFilterCategory('الكل');
+                          setMinPrice('');
+                          setMaxPrice('');
+                          setSortBy('newest');
+                        }}
+                        className="text-[11px] font-bold text-red-500 hover:text-red-600 underline underline-offset-4"
+                      >
+                        إعادة تعيين كافة المرشحات
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
         {/* Section Title */}
         {activeTab !== 'analytics' && (
           <>
@@ -429,6 +628,20 @@ export default function App() {
                                         {task.category}
                                       </span>
                                     )}
+                                    <button 
+                                      onClick={() => openCompleteModal(task.id)}
+                                      className="mr-auto text-[#8a8a7c] hover:text-[#5a5a40] transition-colors"
+                                      title="تعديل السعر"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                    <button 
+                                      onClick={() => duplicateTask(task)}
+                                      className="mr-2 text-[#8a8a7c] hover:text-[#5a5a40] transition-colors"
+                                      title="إعادة إضافة للقائمة الرئيسية"
+                                    >
+                                      <Repeat className="w-3 h-3" />
+                                    </button>
                                   </div>
                                 )}
                                 {task.status === 'pending' && (
@@ -570,8 +783,14 @@ export default function App() {
                 <div className="w-16 h-16 bg-[#f5f5f0] rounded-full flex items-center justify-center mb-6">
                    <Wallet className="w-8 h-8 text-[#5a5a40]" />
                 </div>
-                <h3 className="text-2xl font-bold text-[#2d2d2a] mb-2">كم كان السعر؟</h3>
-                <p className="text-[#8a8a7c] text-sm mb-8 leading-relaxed max-w-[240px]">أدخل تفاصيل التكلفة والفئة لحفظ هذا السجل</p>
+                <h3 className="text-2xl font-bold text-[#2d2d2a] mb-2">
+                  {tasks.find(t => t.id === showPriceModal.taskId)?.status === 'completed' ? 'تعديل التفاصيل' : 'كم كان السعر؟'}
+                </h3>
+                <p className="text-[#8a8a7c] text-sm mb-8 leading-relaxed max-w-[240px]">
+                  {tasks.find(t => t.id === showPriceModal.taskId)?.status === 'completed' 
+                    ? 'قم بتحديث السعر أو الفئة لهذه المهمة' 
+                    : 'أدخل تفاصيل التكلفة والفئة لحفظ هذا السجل'}
+                </p>
                 
                 <div className="w-full space-y-6 mb-8">
                   {/* Currency Selector */}
@@ -651,7 +870,7 @@ export default function App() {
                     onClick={handleComplete}
                     className="flex-1 bg-[#5a5a40] hover:opacity-90 text-white font-bold py-5 rounded-2xl transition-all shadow-lg shadow-[#5a5a40]/20 active:scale-95 text-lg"
                   >
-                    حفظ وإكمال
+                    {tasks.find(t => t.id === showPriceModal.taskId)?.status === 'completed' ? 'حفظ التعديلات' : 'حفظ وإكمال'}
                   </button>
                   <button 
                     id="cancel-modal"
