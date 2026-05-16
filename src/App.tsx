@@ -61,8 +61,16 @@ const CURRENCIES = [
 ];
 
 export default function App() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    try {
+      const saved = localStorage.getItem('masrofati_tasks');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to load from local storage:', e);
+      return [];
+    }
+  });
+  const [isInitialized, setIsInitialized] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<TaskStatus>('pending');
   const [newTaskText, setNewTaskText] = useState('');
@@ -80,48 +88,30 @@ export default function App() {
   const [analyticsCurrency, setAnalyticsCurrency] = useState(CURRENCIES[0].code);
   const [customCategory, setCustomCategory] = useState('');
 
-  // 1. Initial load from Server
+  // 1. Save to Local Storage and Sync to Server
   useEffect(() => {
-    async function loadTasks() {
+    // Save to local storage
+    localStorage.setItem('masrofati_tasks', JSON.stringify(tasks));
+
+    // Sync to server as a backup
+    const syncTasks = async () => {
+      setIsSyncing(true);
       try {
-        const response = await fetch('/api/tasks');
-        if (response.ok) {
-          const data = await response.json();
-          if (Array.isArray(data)) {
-            setTasks(data);
-          }
-        }
+        await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(tasks),
+        });
       } catch (e) {
-        console.error('Failed to load from server:', e);
+        console.error('Failed to save to server:', e);
       } finally {
-        setIsInitialized(true);
+        setIsSyncing(false);
       }
-    }
-    loadTasks();
-  }, []);
+    };
 
-  // 2. Save to Server whenever tasks change
-  useEffect(() => {
-    if (isInitialized) {
-      const syncTasks = async () => {
-        setIsSyncing(true);
-        try {
-          await fetch('/api/tasks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(tasks),
-          });
-        } catch (e) {
-          console.error('Failed to save to server:', e);
-        } finally {
-          setIsSyncing(false);
-        }
-      };
-
-      const timeoutId = setTimeout(syncTasks, 500); // Debounce syncing
-      return () => clearTimeout(timeoutId);
-    }
-  }, [tasks, isInitialized]);
+    const timeoutId = setTimeout(syncTasks, 1000); // Debounce syncing
+    return () => clearTimeout(timeoutId);
+  }, [tasks]);
 
   // --- Handlers ---
   const addTask = () => {
