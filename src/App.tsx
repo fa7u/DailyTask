@@ -7,7 +7,6 @@ import {
   CheckCircle2, 
   ShoppingBag, 
   History, 
-  ChevronLeft,
   X,
   Wallet,
   Tag,
@@ -15,7 +14,6 @@ import {
   Search,
   SlidersHorizontal,
   ChevronDown,
-  ChevronRight,
   ArrowUpDown,
   Pencil,
   Repeat,
@@ -114,7 +112,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'price-high' | 'price-low'>('newest');
   const [showFilters, setShowFilters] = useState(false);
 
-  // 1. Save to Local Storage and Sync to Server
+  // --- Handlers ---
   useEffect(() => {
     // Save to local storage
     localStorage.setItem('masrofati_tasks', JSON.stringify(tasks));
@@ -475,7 +473,7 @@ export default function App() {
                           borderRadius: '16px', 
                           border: '1px solid #f0f0e8',
                           boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-                          fontFamily: 'Cairo, sans-serif'
+                          fontFamily: 'inherit'
                         }}
                       />
                       <Bar dataKey="amount" radius={[8, 8, 0, 0]} barSize={40}>
@@ -509,7 +507,7 @@ export default function App() {
         )}
 
         {/* Search and Filters */}
-        {activeTab !== 'analytics' && (
+        {activeTab !== 'analytics' && activeTab !== 'pending' && (
           <div className="mb-6 space-y-4">
             <div className="flex gap-3">
               <div className="flex-1 bg-white border border-[#f0f0e8] rounded-2xl flex items-center px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-[#5a5a40]/20 transition-all">
@@ -635,7 +633,7 @@ export default function App() {
         )}
 
         {/* Group By Selector */}
-        {activeTab !== 'analytics' && (
+        {activeTab !== 'analytics' && activeTab !== 'pending' && (
           <div className="mb-10 flex justify-center mt-2">
             <div className="inline-flex bg-[#f5f5f0] p-1.5 rounded-[24px] shadow-inner gap-1 border border-[#e5e5df]">
               {(Object.keys(GROUP_LABELS) as GroupBy[]).map((group) => (
