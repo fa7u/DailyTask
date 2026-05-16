@@ -15,6 +15,7 @@ import {
   Search,
   SlidersHorizontal,
   ChevronDown,
+  ChevronRight,
   ArrowUpDown,
   Pencil,
   Repeat,
@@ -33,6 +34,7 @@ import {
 
 // --- Types ---
 type TaskStatus = 'pending' | 'completed' | 'postponed' | 'analytics';
+type GroupBy = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 interface Task {
   id: string;
@@ -58,6 +60,13 @@ const CATEGORIES = [
   'شخصي',
   'أخرى'
 ];
+
+const GROUP_LABELS: Record<GroupBy, string> = {
+  daily: 'يومي',
+  weekly: 'أسبوعي',
+  monthly: 'شهري',
+  yearly: 'سنوي'
+};
 
 const COLORS = ['#5a5a40', '#8a8a7c', '#c4c4bc', '#ecece4'];
 
@@ -94,6 +103,8 @@ export default function App() {
   const [currencyInput, setCurrencyInput] = useState(CURRENCIES[0].code);
   const [analyticsCurrency, setAnalyticsCurrency] = useState(CURRENCIES[0].code);
   const [customCategory, setCustomCategory] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [groupBy, setGroupBy] = useState<GroupBy>('daily');
 
   // --- Filtering States ---
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,6 +140,10 @@ export default function App() {
   }, [tasks]);
 
   // --- Handlers ---
+  const toggleGroup = (date: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [date]: !prev[date] }));
+  };
+
   const addTask = () => {
     if (!newTaskText.trim()) return;
     const newTask: Task = {
@@ -282,12 +297,31 @@ export default function App() {
   const groupedTasks = useMemo(() => {
     const groups: Record<string, Task[]> = {};
     filteredTasks.forEach(task => {
-      const dateKey = task.date || new Date(task.createdAt).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' });
+      const date = new Date(task.createdAt);
+      let dateKey = '';
+
+      if (groupBy === 'daily') {
+        dateKey = task.date || date.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' });
+      } else if (groupBy === 'weekly') {
+        // Find start of week (Saturday in many Arab countries, but Sunday is fine too)
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 6 ? -6 : 0); // This is a bit complex without a lib, let's simplify
+        
+        // Simple: "Week of [Date]"
+        const firstDay = new Date(d.setDate(d.getDate() - d.getDay()));
+        dateKey = `أسبوع ${firstDay.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })} - ${new Date(firstDay.setDate(firstDay.getDate() + 6)).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      } else if (groupBy === 'monthly') {
+        dateKey = date.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
+      } else if (groupBy === 'yearly') {
+        dateKey = date.toLocaleDateString('ar-EG', { year: 'numeric' });
+      }
+
       if (!groups[dateKey]) groups[dateKey] = [];
       groups[dateKey].push(task);
     });
     return groups;
-  }, [filteredTasks]);
+  }, [filteredTasks, groupBy]);
 
   // Calculate total expenses from completed tasks (grouped by currency)
   const totalsByCurrency = useMemo(() => {
@@ -313,7 +347,7 @@ export default function App() {
   }, [tasks, analyticsCurrency]);
 
   return (
-    <div className="min-h-screen bg-[#fdfcfb] font-sans pb-28 overflow-x-hidden text-[#333330]">
+    <div dir="rtl" className="min-h-screen bg-[#fdfcfb] font-sans pb-28 overflow-x-hidden text-[#333330]">
       {/* Header */}
       <header className="bg-[#f5f5f0] border-b border-[#e5e5df] sticky top-0 z-30 px-6 py-5 md:py-8">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
@@ -322,7 +356,7 @@ export default function App() {
               <ShoppingBag className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-[#2d2d2a] tracking-tight">مصروفاتي</h1>
+              <h1 className="text-2xl font-bold text-[#2d2d2a]">مصروفاتي</h1>
               <div className="flex items-center gap-2">
                 <p className="text-xs text-[#8a8a7c] font-medium">تتبع مشترياتك ومصاريفك اليومية</p>
                 {isSyncing && (
@@ -340,7 +374,7 @@ export default function App() {
           </div>
           
           <div className="text-left flex flex-col items-end gap-1">
-            <div className="flex items-center gap-1.5 text-[#8a8a7c] text-[10px] mb-1 justify-end uppercase tracking-widest font-bold whitespace-nowrap">
+            <div className="flex items-center gap-1.5 text-[#8a8a7c] text-[10px] mb-1 justify-end uppercase font-bold whitespace-nowrap">
               إجمالي المصروفات
             </div>
             {(Object.entries(totalsByCurrency) as [string, number][]).length > 0 ? (
@@ -518,7 +552,7 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {/* Sorting */}
                       <div className="space-y-3">
-                        <label className="text-[10px] font-black text-[#8a8a7c] uppercase tracking-widest flex items-center gap-2 px-1">
+                        <label className="text-[10px] font-black text-[#8a8a7c] uppercase flex items-center gap-2 px-1">
                           <ArrowUpDown className="w-3.5 h-3.5" />
                           ترتيب حسب
                         </label>
@@ -536,7 +570,7 @@ export default function App() {
 
                       {/* Category Filter */}
                       <div className="space-y-3">
-                        <label className="text-[10px] font-black text-[#8a8a7c] uppercase tracking-widest flex items-center gap-2 px-1">
+                        <label className="text-[10px] font-black text-[#8a8a7c] uppercase flex items-center gap-2 px-1">
                           <Tag className="w-3.5 h-3.5" />
                           الفئة
                         </label>
@@ -556,7 +590,7 @@ export default function App() {
 
                       {/* Price Range */}
                       <div className="space-y-3">
-                        <label className="text-[10px] font-black text-[#8a8a7c] uppercase tracking-widest flex items-center gap-2 px-1">
+                        <label className="text-[10px] font-black text-[#8a8a7c] uppercase flex items-center gap-2 px-1">
                           <Wallet className="w-3.5 h-3.5" />
                           نطاق السعر
                         </label>
@@ -600,6 +634,30 @@ export default function App() {
           </div>
         )}
 
+        {/* Group By Selector */}
+        {activeTab !== 'analytics' && (
+          <div className="mb-10 flex justify-center mt-2">
+            <div className="inline-flex bg-[#f5f5f0] p-1.5 rounded-[24px] shadow-inner gap-1 border border-[#e5e5df]">
+              {(Object.keys(GROUP_LABELS) as GroupBy[]).map((group) => (
+                <button
+                  key={group}
+                  onClick={() => {
+                    setGroupBy(group);
+                    setCollapsedGroups({});
+                  }}
+                  className={`px-5 py-2 rounded-[18px] text-[10px] font-black uppercase transition-all duration-300 ${
+                    groupBy === group 
+                      ? 'bg-white text-[#5a5a40] shadow-sm scale-[1.02]' 
+                      : 'text-[#8a8a7c] hover:text-[#6b6b60]'
+                  }`}
+                >
+                  {GROUP_LABELS[group]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Section Title */}
         {activeTab !== 'analytics' && (
           <>
@@ -613,124 +671,167 @@ export default function App() {
             </div>
 
             {/* List with grouping */}
-            <div className="space-y-12">
+            <div className="space-y-10">
               {(Object.entries(groupedTasks) as [string, Task[]][]).length > 0 ? (
-                (Object.entries(groupedTasks) as [string, Task[]][]).map(([date, dateTasks]) => (
-                  <div key={date} className="space-y-6">
-                    {(activeTab === 'completed' || activeTab === 'postponed') && (
-                      <div className="flex items-center gap-4 px-2">
-                        <span className="text-xs font-black text-[#8a8a7c] whitespace-nowrap bg-[#ecece4] px-4 py-1.5 rounded-full uppercase tracking-widest">{date}</span>
-                        <div className="h-[1px] flex-1 bg-[#e5e5df]" />
-                      </div>
-                    )}
-                    <div className="space-y-4">
-                      <AnimatePresence mode="popLayout">
-                        {dateTasks.map((task) => (
-                          <motion.div
-                            key={task.id}
-                            layout
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-white border border-[#f0f0e8] rounded-[16px] p-2.5 shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div className="flex-1">
-                                <h3 className="font-bold text-[#2d2d2a] text-[13px] mb-0.5">{task.text}</h3>
-                                {task.status === 'completed' && (
-                                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                                    <span className="text-[#5a5a40] font-bold text-[9px] bg-[#f5f5f0] px-2 py-0.5 rounded-lg border border-[#e5e5df]">
-                                       {task.price?.toLocaleString('ar-EG')} {task.currency || 'ر.ي'}
-                                    </span>
-                                    {task.category && (
-                                      <span className="text-[#8a8a7c] font-bold text-[7px] bg-[#ecece4] px-1.5 py-0.5 rounded-full uppercase tracking-tighter">
-                                        {task.category}
-                                      </span>
-                                    )}
-                                    <button 
-                                      onClick={() => openCompleteModal(task.id)}
-                                      className="mr-auto text-[#8a8a7c] hover:text-[#5a5a40] transition-colors"
-                                      title="تعديل السعر"
-                                    >
-                                      <Pencil className="w-3 h-3" />
-                                    </button>
-                                    <button 
-                                      onClick={() => duplicateTask(task)}
-                                      className="mr-2 text-[#8a8a7c] hover:text-[#5a5a40] transition-colors"
-                                      title="إعادة إضافة للقائمة الرئيسية"
-                                    >
-                                      <Repeat className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                )}
-                                {task.status === 'pending' && (
-                                  <span className="text-[#8a8a7c] text-[9px] mt-1 block font-bold flex items-center gap-2">
-                                    <div className="w-1 h-1 rounded-full bg-[#e5e5df]" />
-                                    {new Date(task.createdAt).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' })}
-                                  </span>
-                                )}
-                                {task.status === 'postponed' && (
-                                  <span className="text-[#8a8a7c] text-[9px] mt-1 block font-bold flex items-center gap-2">
-                                    <div className="w-1 h-1 rounded-full bg-[#e5e5df]" />
-                                    تأجيل: {task.date}
-                                  </span>
-                                )}
-                              </div>
-                              
-                              <div className="flex items-center gap-2 justify-end sm:justify-start">
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}
-                                  className="p-2 text-[#c94b4b] bg-[#fff5f5] rounded-lg hover:bg-[#c94b4b] hover:text-white transition-all border border-[#c94b4b]/10"
-                                  title="حذف"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                                
-                                {task.status === 'pending' && (
-                                  <>
-                                    <button 
-                                      onClick={() => postponeTask(task.id)}
-                                      className="py-2 px-3 text-[#6b6b60] bg-[#f5f5f0] rounded-lg hover:bg-[#6b6b60] hover:text-white transition-all border border-[#e5e5df] flex items-center gap-2"
-                                    >
-                                      <Clock className="w-3.5 h-3.5" />
-                                      <span className="text-[9px] font-bold">تأجيل</span>
-                                    </button>
-                                    <button 
-                                      onClick={() => openCompleteModal(task.id)}
-                                      className="py-2 px-4 text-white bg-[#5a5a40] rounded-lg hover:opacity-90 transition-all border border-[#5a5a40]/10 flex items-center gap-2 group/btn shadow-md shadow-[#5a5a40]/10"
-                                    >
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                      <span className="text-[9px] font-bold">إتمام</span>
-                                    </button>
-                                  </>
-                                )}
+                (Object.entries(groupedTasks) as [string, Task[]][]).map(([date, dateTasks]) => {
+                  const isCollapsed = collapsedGroups[date];
+                  const groupTotals = dateTasks.reduce((acc, t) => {
+                    if (t.status === 'completed') {
+                      const cur = t.currency || CURRENCIES[0].code;
+                      acc[cur] = (acc[cur] || 0) + (t.price || 0);
+                    }
+                    return acc;
+                  }, {} as Record<string, number>);
 
-                                {task.status === 'postponed' && (
-                                  <>
-                                    <button 
-                                      onClick={() => restoreTask(task.id)}
-                                      className="py-2 px-3 text-[#5a5a40] bg-[#f5f5f0] rounded-lg hover:bg-[#5a5a40] hover:text-white transition-all border border-[#e5e5df] flex items-center gap-2"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                      <span className="text-[9px] font-bold">إعادة للرئيسية</span>
-                                    </button>
-                                    <button 
-                                      onClick={() => openCompleteModal(task.id)}
-                                      className="py-2 px-4 text-white bg-[#5a5a40] rounded-lg hover:opacity-90 transition-all border border-[#5a5a40]/10 flex items-center gap-2 group/btn shadow-md shadow-[#5a5a40]/10"
-                                    >
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                      <span className="text-[9px] font-bold">إتمام</span>
-                                    </button>
-                                  </>
-                                )}
-                              </div>
+                  return (
+                    <div key={date} className="space-y-4">
+                      <div 
+                        onClick={() => setCollapsedGroups(prev => ({ ...prev, [date]: !prev[date] }))}
+                        className="flex items-center justify-between gap-4 px-2 cursor-pointer group/header py-2 hover:bg-[#f5f5f0] rounded-2xl transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-1 rounded-lg bg-[#ecece4] text-[#8a8a7c] transition-transform duration-300 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>
+                            <ChevronDown className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-black text-[#5a5a40] whitespace-nowrap bg-[#ecece4] px-4 py-1.5 rounded-full uppercase">
+                            {date}
+                          </span>
+                        </div>
+                        
+                        <div className="flex-1 h-[1px] bg-[#e5e5df] mx-2" />
+
+                        {Object.keys(groupTotals).length > 0 && (
+                          <div className="flex gap-2">
+                            {Object.entries(groupTotals).map(([currency, total]) => (
+                              <span key={currency} className="text-[10px] font-black text-[#5a5a40] bg-[#fdfcfb] border border-[#e5e5df] px-3 py-1 rounded-lg shadow-sm">
+                                {total.toLocaleString('ar-EG')} {currency}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <AnimatePresence>
+                        {!isCollapsed && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="space-y-4 pt-2">
+                              <AnimatePresence mode="popLayout">
+                                {dateTasks.map((task) => (
+                                  <motion.div
+                                    key={task.id}
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    className="bg-white border border-[#f0f0e8] rounded-[16px] p-2.5 shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
+                                  >
+                                    {/* Task Card Content stays same */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                      <div className="flex-1">
+                                        <h3 className="font-bold text-[#2d2d2a] text-[13px] mb-0.5">{task.text}</h3>
+                                        {task.status === 'completed' && (
+                                          <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                            <span className="text-[#5a5a40] font-bold text-[9px] bg-[#f5f5f0] px-2 py-0.5 rounded-lg border border-[#e5e5df]">
+                                               {task.price?.toLocaleString('ar-EG')} {task.currency || 'ر.ي'}
+                                            </span>
+                                            {task.category && (
+                                              <span className="text-[#8a8a7c] font-bold text-[7px] bg-[#ecece4] px-1.5 py-0.5 rounded-full uppercase">
+                                                {task.category}
+                                              </span>
+                                            )}
+                                            <button 
+                                              onClick={() => openCompleteModal(task.id)}
+                                              className="mr-auto text-[#8a8a7c] hover:text-[#5a5a40] transition-colors"
+                                              title="تعديل السعر"
+                                            >
+                                              <Pencil className="w-3 h-3" />
+                                            </button>
+                                            <button 
+                                              onClick={() => duplicateTask(task)}
+                                              className="mr-2 text-[#8a8a7c] hover:text-[#5a5a40] transition-colors"
+                                              title="إعادة إضافة للقائمة الرئيسية"
+                                            >
+                                              <Repeat className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        )}
+                                        {task.status === 'pending' && (
+                                          <span className="text-[#8a8a7c] text-[9px] mt-1 block font-bold flex items-center gap-2">
+                                            <div className="w-1 h-1 rounded-full bg-[#e5e5df]" />
+                                            {new Date(task.createdAt).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' })}
+                                          </span>
+                                        )}
+                                        {task.status === 'postponed' && (
+                                          <span className="text-[#8a8a7c] text-[9px] mt-1 block font-bold flex items-center gap-2">
+                                            <div className="w-1 h-1 rounded-full bg-[#e5e5df]" />
+                                            تأجيل: {task.date}
+                                          </span>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-2 justify-end sm:justify-start">
+                                        <button 
+                                          onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}
+                                          className="p-2 text-[#c94b4b] bg-[#fff5f5] rounded-lg hover:bg-[#c94b4b] hover:text-white transition-all border border-[#c94b4b]/10"
+                                          title="حذف"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                        
+                                        {task.status === 'pending' && (
+                                          <>
+                                            <button 
+                                              onClick={() => postponeTask(task.id)}
+                                              className="py-2 px-3 text-[#6b6b60] bg-[#f5f5f0] rounded-lg hover:bg-[#6b6b60] hover:text-white transition-all border border-[#e5e5df] flex items-center gap-2"
+                                            >
+                                              <Clock className="w-3.5 h-3.5" />
+                                              <span className="text-[9px] font-bold">تأجيل</span>
+                                            </button>
+                                            <button 
+                                              onClick={() => openCompleteModal(task.id)}
+                                              className="py-2 px-4 text-white bg-[#5a5a40] rounded-lg hover:opacity-90 transition-all border border-[#5a5a40]/10 flex items-center gap-2 group/btn shadow-md shadow-[#5a5a40]/10"
+                                            >
+                                              <CheckCircle2 className="w-3.5 h-3.5" />
+                                              <span className="text-[9px] font-bold">إتمام</span>
+                                            </button>
+                                          </>
+                                        )}
+
+                                        {task.status === 'postponed' && (
+                                          <>
+                                            <button 
+                                              onClick={() => restoreTask(task.id)}
+                                              className="py-2 px-3 text-[#5a5a40] bg-[#f5f5f0] rounded-lg hover:bg-[#5a5a40] hover:text-white transition-all border border-[#e5e5df] flex items-center gap-2"
+                                            >
+                                              <Plus className="w-3.5 h-3.5" />
+                                              <span className="text-[9px] font-bold">إعادة للرئيسية</span>
+                                            </button>
+                                            <button 
+                                              onClick={() => openCompleteModal(task.id)}
+                                              className="py-2 px-4 text-white bg-[#5a5a40] rounded-lg hover:opacity-90 transition-all border border-[#5a5a40]/10 flex items-center gap-2 group/btn shadow-md shadow-[#5a5a40]/10"
+                                            >
+                                              <CheckCircle2 className="w-3.5 h-3.5" />
+                                              <span className="text-[9px] font-bold">إتمام</span>
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                ))}
+                              </AnimatePresence>
                             </div>
                           </motion.div>
-                        ))}
+                        )}
                       </AnimatePresence>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="py-24 flex flex-col items-center justify-center text-[#8a8a7c] gap-6">
                   <div className="w-24 h-24 bg-[#f5f5f0] rounded-full flex items-center justify-center">
@@ -879,7 +980,7 @@ export default function App() {
 
                   {/* Category Selection */}
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-[9px] font-black text-[#8a8a7c] uppercase tracking-widest px-2">
+                    <div className="flex items-center gap-2 text-[9px] font-black text-[#8a8a7c] uppercase px-2">
                        <Tag className="w-3 h-3" />
                        الفئة
                     </div>
