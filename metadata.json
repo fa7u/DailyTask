@@ -1,0 +1,8 @@
+{
+  "name": "مصاريفي - متتبع المهام والمصاريف",
+  "description": "تطبيق بسيط واحترافي لمتابعة المهام اليومية والمصروفات، مع ميزة حفظ البيانات محلياً وتنظيم المشتريات.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
