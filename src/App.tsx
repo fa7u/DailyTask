@@ -371,7 +371,7 @@ export default function App() {
               <ShoppingBag className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-app-text">مصروفاتي</h1>
+              <h1 className="text-2xl font-bold text-app-text">Sarfiah</h1>
               <div className="flex items-center gap-2">
                 <p className="text-xs text-app-muted font-medium">تتبع مشترياتك ومصاريفك اليومية</p>
                 {isSyncing && (
