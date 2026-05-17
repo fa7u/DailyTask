@@ -367,8 +367,8 @@ export default function App() {
       <header className="bg-app-surface border-b border-app-border sticky top-0 z-30 px-6 py-5 md:py-8">
         <div className="max-w-2xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-app-accent rounded-xl flex items-center justify-center overflow-hidden shadow-md">
-              <img src="/icon.png" alt="Sarfiah" className="w-full h-full object-cover" />
+            <div className="w-12 h-12 bg-app-accent rounded-xl flex items-center justify-center text-white shadow-md overflow-hidden">
+              <Wallet className="w-8 h-8" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-app-text">Sarfiah</h1>
