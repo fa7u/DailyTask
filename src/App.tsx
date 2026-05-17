@@ -299,18 +299,21 @@ export default function App() {
     ];
 
     const csvContent = [headers.join(','), ...rows, ...totalsSection].join('\r\n');
-    const blob = new Blob(['\ufeff', csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\ufeff', csvContent], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     
     const dateStr = new Date().toISOString().split('T')[0];
     link.download = `sarfiah_report_${dateStr}.csv`;
+    link.target = '_blank';
     
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }, 200);
   };
 
   const clearAllCompleted = () => {
