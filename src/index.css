@@ -3,12 +3,35 @@
 
 @theme {
   --font-sans: "IBM Plex Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-app-bg: var(--app-bg);
+  --color-app-surface: var(--app-surface);
+  --color-app-border: var(--app-border);
+  --color-app-text: var(--app-text);
+  --color-app-muted: var(--app-muted);
+  --color-app-accent: var(--app-accent);
 }
 
 :root {
   direction: rtl;
+  --app-bg: #fdfcfb;
+  --app-surface: #f5f5f0;
+  --app-border: #e5e5df;
+  --app-text: #333330;
+  --app-muted: #8a8a7c;
+  --app-accent: #5a5a40;
+}
+
+.dark {
+  --app-bg: #0d0d0c;
+  --app-surface: #1a1a18;
+  --app-border: #2d2d2a;
+  --app-text: #e5e5e0;
+  --app-muted: #a1a195;
+  --app-accent: #8a8a60;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900;
+  @apply bg-app-bg text-app-text;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
