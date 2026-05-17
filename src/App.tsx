@@ -768,7 +768,8 @@ export default function App() {
         )}
 
         {/* Search and Filters */}
-        <div className="mb-6 space-y-4">
+        {activeTab === 'completed' && (
+          <div className="mb-6 space-y-4">
             <div className="flex gap-2 sm:gap-3">
               <div className="flex-1 bg-app-bg dark:bg-app-surface border border-app-border rounded-xl sm:rounded-2xl flex items-center px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm focus-within:ring-2 focus-within:ring-app-accent/20 transition-all">
                 <Search className="w-4 h-4 sm:w-5 sm:h-5 text-app-muted ml-2 sm:ml-3 shrink-0" />
@@ -968,6 +969,7 @@ export default function App() {
               )}
             </AnimatePresence>
           </div>
+        )}
         
         {/* Group By Selector */}
         {activeTab !== 'analytics' && activeTab !== 'pending' && (
