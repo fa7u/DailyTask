@@ -46,6 +46,7 @@ interface Task {
   category?: string;
   date?: string;
   createdAt: string;
+  tags?: string[];
 }
 
 // --- Constants ---
@@ -107,16 +108,30 @@ export default function App() {
   const [currencyInput, setCurrencyInput] = useState(CURRENCIES[0].code);
   const [analyticsCurrency, setAnalyticsCurrency] = useState(CURRENCIES[0].code);
   const [customCategory, setCustomCategory] = useState('');
+  const [tagsInput, setTagsInput] = useState('');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [groupBy, setGroupBy] = useState<GroupBy>('daily');
 
   // --- Filtering States ---
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('الكل');
+  const [filterTag, setFilterTag] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'price-high' | 'price-low'>('newest');
   const [showFilters, setShowFilters] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [monthlyBudgets, setMonthlyBudgets] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('masrofati_budgets');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetInput, setBudgetInput] = useState('');
 
   // --- Handlers ---
   useEffect(() => {
@@ -151,6 +166,10 @@ export default function App() {
     const timeoutId = setTimeout(syncTasks, 1000); // Debounce syncing
     return () => clearTimeout(timeoutId);
   }, [tasks]);
+
+  useEffect(() => {
+    localStorage.setItem('masrofati_budgets', JSON.stringify(monthlyBudgets));
+  }, [monthlyBudgets]);
 
   // --- Handlers ---
   const toggleGroup = (date: string) => {
@@ -193,7 +212,7 @@ export default function App() {
 
   const postponeTask = (id: string) => {
     setTasks(tasks.map(t => 
-      t.id === id ? { ...t, status: 'postponed', date: new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' }) } : t
+      t.id === id ? { ...t, status: 'postponed', date: new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit', numberingSystem: 'latn' }) } : t
     ));
   };
 
@@ -213,6 +232,7 @@ export default function App() {
     if (task && task.status === 'completed') {
       setPriceInput(task.price?.toString() || '');
       setCurrencyInput(task.currency || CURRENCIES[0].code);
+      setTagsInput(task.tags?.join(' ') || '');
       if (CATEGORIES.includes(task.category || '')) {
         setCategoryInput(task.category || CATEGORIES[0]);
         setCustomCategory('');
@@ -225,6 +245,7 @@ export default function App() {
       setCategoryInput(CATEGORIES[0]);
       setCurrencyInput(CURRENCIES[0].code);
       setCustomCategory('');
+      setTagsInput('');
     }
     setShowPriceModal({ isOpen: true, taskId: id });
   };
@@ -234,6 +255,12 @@ export default function App() {
     const price = parseFloat(priceInput) || 0;
     const finalCategory = categoryInput === 'أخرى' && customCategory.trim() ? customCategory : categoryInput;
     
+    // Parse tags: split by space/comma and remove #
+    const tags = tagsInput
+      .split(/[\s,]+/)
+      .map(tag => tag.replace(/^#/, '').trim())
+      .filter(tag => tag.length > 0);
+    
     setTasks(tasks.map(t => 
       t.id === showPriceModal.taskId 
         ? { 
@@ -242,7 +269,8 @@ export default function App() {
             price,
             currency: currencyInput,
             category: finalCategory,
-            date: t.status === 'completed' ? t.date : new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' }) 
+            tags,
+            date: t.status === 'completed' ? t.date : new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit', numberingSystem: 'latn' }) 
           } 
         : t
     ));
@@ -252,6 +280,7 @@ export default function App() {
     setCategoryInput(CATEGORIES[0]);
     setCurrencyInput(CURRENCIES[0].code);
     setCustomCategory('');
+    setTagsInput('');
   };
 
   const handleNumpad = (val: string) => {
@@ -325,6 +354,14 @@ export default function App() {
     setShowClearAllModal(false);
   };
 
+  const setBudget = () => {
+    setMonthlyBudgets(prev => ({
+      ...prev,
+      [analyticsCurrency]: parseFloat(budgetInput) || 0
+    }));
+    setShowBudgetModal(false);
+  };
+
   const filteredTasks = useMemo(() => {
     let result = tasks.filter(t => t.status === activeTab);
 
@@ -337,6 +374,21 @@ export default function App() {
     // Category filter
     if (filterCategory !== 'الكل') {
       result = result.filter(t => t.category === filterCategory);
+    }
+
+    // Tag filter
+    if (filterTag) {
+      result = result.filter(t => t.tags?.includes(filterTag));
+    }
+
+    // Date Range filter
+    if (dateFrom) {
+      result = result.filter(t => new Date(t.createdAt).getTime() >= new Date(dateFrom).getTime());
+    }
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      result = result.filter(t => new Date(t.createdAt).getTime() <= end.getTime());
     }
 
     // Price range filter
@@ -367,7 +419,7 @@ export default function App() {
       let dateKey = '';
 
       if (groupBy === 'daily') {
-        dateKey = task.date || date.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' });
+        dateKey = task.date || date.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit', numberingSystem: 'latn' });
       } else if (groupBy === 'weekly') {
         // Find start of week (Saturday in many Arab countries, but Sunday is fine too)
         const d = new Date(date);
@@ -376,11 +428,11 @@ export default function App() {
         
         // Simple: "Week of [Date]"
         const firstDay = new Date(d.setDate(d.getDate() - d.getDay()));
-        dateKey = `أسبوع ${firstDay.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })} - ${new Date(firstDay.setDate(firstDay.getDate() + 6)).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+        dateKey = `أسبوع ${firstDay.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', numberingSystem: 'latn' })} - ${new Date(firstDay.setDate(firstDay.getDate() + 6)).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric', numberingSystem: 'latn' })}`;
       } else if (groupBy === 'monthly') {
-        dateKey = date.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
+        dateKey = date.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric', numberingSystem: 'latn' });
       } else if (groupBy === 'yearly') {
-        dateKey = date.toLocaleDateString('ar-EG', { year: 'numeric' });
+        dateKey = date.toLocaleDateString('ar-EG', { year: 'numeric', numberingSystem: 'latn' });
       }
 
       if (!groups[dateKey]) groups[dateKey] = [];
@@ -399,12 +451,12 @@ export default function App() {
     return totals;
   }, [tasks]);
 
-
   const chartColors = useMemo(() => {
     return isDarkMode 
       ? ['#96968c', '#8a8a60', '#5a5a40', '#262624'] 
       : ['#5a5a40', '#7c7c72', '#b8b8b0', '#eeeeea'];
   }, [isDarkMode]);
+
   const chartData = useMemo(() => {
     const groups: Record<string, number> = {};
     tasks
@@ -416,6 +468,13 @@ export default function App() {
     return Object.entries(groups).map(([name, amount]) => ({ name, amount }));
   }, [tasks, analyticsCurrency]);
 
+  const progressPercentage = useMemo(() => {
+    const budget = monthlyBudgets[analyticsCurrency];
+    if (!budget) return 0;
+    const spent = chartData.reduce((acc, curr) => acc + curr.amount, 0);
+    return (spent / budget) * 100;
+  }, [chartData, monthlyBudgets, analyticsCurrency]);
+
   return (
     <div dir="rtl" className="min-h-screen bg-app-bg font-sans pb-28 overflow-x-hidden text-app-text">
       {/* Header */}
@@ -426,7 +485,7 @@ export default function App() {
               <Wallet className="w-8 h-8" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-app-text">Sarfiah</h1>
+              <h1 className="text-2xl font-black text-app-text tracking-tight">Sarfiah</h1>
               <div className="flex items-center gap-2">
                 <p className="text-xs text-app-muted font-medium">تتبع مشترياتك ومصاريفك اليومية</p>
                 {isSyncing && (
@@ -459,13 +518,13 @@ export default function App() {
               {(Object.entries(totalsByCurrency) as [string, number][]).length > 0 ? (
                 (Object.entries(totalsByCurrency) as [string, number][]).map(([currency, total]) => (
                   <div key={currency} className="text-lg md:text-xl font-bold text-app-accent flex items-center gap-1 justify-end whitespace-nowrap">
-                    <span>{total.toLocaleString('ar-EG')}</span>
+                    <span>{total.toLocaleString('en-US')}</span>
                     <span className="text-[10px] md:text-xs font-bold opacity-70">{currency}</span>
                   </div>
                 ))
               ) : (
                 <div className="text-lg md:text-xl font-bold text-app-accent flex items-center gap-1 justify-end whitespace-nowrap">
-                  <span>٠</span>
+                  <span>0</span>
                   <span className="text-[10px] md:text-xs font-bold opacity-70">ر.ي</span>
                 </div>
               )}
@@ -526,6 +585,82 @@ export default function App() {
               ))}
             </div>
 
+            {/* Budget Section */}
+            <div className="bg-app-bg dark:bg-app-surface border border-app-border rounded-[32px] p-6 shadow-sm mb-6">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2 text-app-text font-bold">
+                  <Wallet className="w-5 h-5 text-app-accent" />
+                  <span>الميزانية الشهرية ({analyticsCurrency})</span>
+                </div>
+                <button 
+                  onClick={() => {
+                    setBudgetInput(monthlyBudgets[analyticsCurrency]?.toString() || '');
+                    setShowBudgetModal(true);
+                  }}
+                  className="text-[10px] font-black text-app-accent bg-app-accent/10 py-1.5 px-3 rounded-full hover:bg-app-accent hover:text-white transition-all"
+                >
+                  {monthlyBudgets[analyticsCurrency] ? 'تعديل الميزانية' : 'تحديد ميزانية'}
+                </button>
+              </div>
+
+              {monthlyBudgets[analyticsCurrency] ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[10px] font-bold text-app-muted uppercase mb-1">المصروف</p>
+                      <p className="text-xl font-black text-app-text">
+                        {(chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
+                        <span className="text-xs mr-1 opacity-50">{analyticsCurrency}</span>
+                      </p>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[10px] font-bold text-app-muted uppercase mb-1">المتبقي</p>
+                      <p className={`text-xl font-black ${
+                        monthlyBudgets[analyticsCurrency] - chartData.reduce((acc, curr) => acc + curr.amount, 0) < 0 
+                          ? 'text-red-500 font-black' 
+                          : 'text-emerald-500'
+                      }`}>
+                        {(monthlyBudgets[analyticsCurrency] - chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
+                        <span className="text-xs mr-1 opacity-50">{analyticsCurrency}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="relative h-4 bg-app-border/30 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ 
+                        width: `${Math.min(100, progressPercentage)}%` 
+                      }}
+                      className={`h-full rounded-full ${
+                        progressPercentage >= 75 
+                          ? 'bg-red-500' 
+                          : progressPercentage >= 55 
+                            ? 'bg-orange-500' 
+                            : 'bg-app-accent'
+                      }`}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between text-[10px] font-bold text-app-muted">
+                    <span>0%</span>
+                    <span>{Math.round(progressPercentage)}% من الميزانية</span>
+                    <span>100%</span>
+                  </div>
+
+                  {(chartData.reduce((acc, curr) => acc + curr.amount, 0) / monthlyBudgets[analyticsCurrency]) > 1 && (
+                    <div className="bg-red-500/10 text-red-500 p-3 rounded-xl text-xs font-bold text-center border border-red-500/20">
+                      لقد تجاوزت الميزانية المحددة لهذا الشهر!
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="py-8 text-center bg-app-surface dark:bg-app-border/5 rounded-2xl border border-dashed border-app-border">
+                  <p className="text-xs text-app-muted font-bold">لم تقم بتحديد ميزانية لهذه العملة بعد</p>
+                </div>
+              )}
+            </div>
+
             {chartData.length > 0 ? (
               <div className="bg-app-bg dark:bg-app-surface border border-app-border rounded-[32px] p-6 shadow-sm mb-10">
                 <h3 className="text-lg font-bold text-app-text mb-8 flex items-center gap-2">
@@ -575,7 +710,7 @@ export default function App() {
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: chartColors[i % chartColors.length] }} />
                         <span className="font-bold text-app-text text-sm">{item.name}</span>
                       </div>
-                      <span className="font-black text-app-accent text-sm whitespace-nowrap">{item.amount.toLocaleString('ar-EG')} {analyticsCurrency}</span>
+                      <span className="font-black text-app-accent text-sm whitespace-nowrap">{item.amount.toLocaleString('en-US')} {analyticsCurrency}</span>
                     </div>
                   ))}
                 </div>
@@ -670,6 +805,24 @@ export default function App() {
                         </select>
                       </div>
 
+                      {/* Tag Filter */}
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-app-muted uppercase flex items-center gap-2 px-1">
+                          <Tag className="w-3.5 h-3.5" />
+                          الوسم (#)
+                        </label>
+                        <select 
+                          className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm font-bold text-app-accent outline-none appearance-none"
+                          value={filterTag}
+                          onChange={(e) => setFilterTag(e.target.value)}
+                        >
+                          <option value="">كل الوسوم</option>
+                          {Array.from(new Set(tasks.flatMap(t => t.tags || []))).map(tag => (
+                            <option key={tag} value={tag}>#{tag}</option>
+                          ))}
+                        </select>
+                      </div>
+
                       {/* Price Range */}
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-app-muted uppercase flex items-center gap-2 px-1">
@@ -693,6 +846,34 @@ export default function App() {
                           />
                         </div>
                       </div>
+
+                      {/* Date Range */}
+                      <div className="space-y-3 md:col-span-3">
+                        <label className="text-[10px] font-black text-app-muted uppercase flex items-center gap-2 px-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          نطاق التاريخ
+                        </label>
+                        <div className="flex gap-4">
+                          <div className="flex-1 relative">
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[8px] font-black text-app-muted pointer-events-none">من</span>
+                            <input 
+                              type="date" 
+                              className="w-full bg-app-bg border border-app-border rounded-xl pl-4 pr-10 py-3 text-sm font-bold text-app-accent outline-none appearance-none"
+                              value={dateFrom}
+                              onChange={(e) => setDateFrom(e.target.value)}
+                            />
+                          </div>
+                          <div className="flex-1 relative">
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[8px] font-black text-app-muted pointer-events-none">إلى</span>
+                            <input 
+                              type="date" 
+                              className="w-full bg-app-bg border border-app-border rounded-xl pl-4 pr-10 py-3 text-sm font-bold text-app-accent outline-none appearance-none"
+                              value={dateTo}
+                              onChange={(e) => setDateTo(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     
                     <div className="flex justify-start">
@@ -700,9 +881,12 @@ export default function App() {
                         onClick={() => {
                           setSearchQuery('');
                           setFilterCategory('الكل');
+                          setFilterTag('');
                           setMinPrice('');
                           setMaxPrice('');
                           setSortBy('newest');
+                          setDateFrom('');
+                          setDateTo('');
                         }}
                         className="text-[11px] font-bold text-red-500 hover:text-red-600 underline underline-offset-4"
                       >
@@ -804,7 +988,7 @@ export default function App() {
                           <div className="flex gap-2">
                             {Object.entries(groupTotals).map(([currency, total]) => (
                               <span key={currency} className="text-[10px] font-black text-app-accent bg-app-surface dark:bg-app-bg border border-app-border px-3 py-1 rounded-lg shadow-sm">
-                                {total.toLocaleString('ar-EG')} {currency}
+                                {total.toLocaleString('en-US')} {currency}
                               </span>
                             ))}
                           </div>
@@ -862,13 +1046,18 @@ export default function App() {
                                           {task.status === 'completed' && (
                                             <div className="flex flex-wrap items-center gap-2 mt-1.5">
                                               <span className="text-app-accent font-bold text-[9px] bg-app-surface px-2 py-0.5 rounded-lg border border-app-border">
-                                                 {task.price?.toLocaleString('ar-EG')} {task.currency || 'ر.ي'}
+                                                 {task.price?.toLocaleString('en-US')} {task.currency || 'ر.ي'}
                                               </span>
                                               {task.category && (
                                                 <span className="text-app-muted font-bold text-[7px] bg-app-border dark:bg-app-border/20 px-1.5 py-0.5 rounded-full uppercase">
                                                   {task.category}
                                                 </span>
                                               )}
+                                              {task.tags && task.tags.length > 0 && task.tags.map(tag => (
+                                                <span key={tag} className="text-app-accent font-bold text-[7px] bg-app-accent/5 px-1.5 py-0.5 rounded-full">
+                                                  #{tag}
+                                                </span>
+                                              ))}
                                               <button 
                                                 onClick={() => openCompleteModal(task.id)}
                                                 className="mr-auto text-app-muted hover:text-app-accent transition-colors"
@@ -888,7 +1077,7 @@ export default function App() {
                                           {task.status === 'pending' && (
                                             <span className="text-app-muted text-[9px] mt-1 block font-bold flex items-center gap-2">
                                               <div className="w-1 h-1 rounded-full bg-app-border" />
-                                              {new Date(task.createdAt).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit' })}
+                                              {new Date(task.createdAt).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit', numberingSystem: 'latn' })}
                                             </span>
                                           )}
                                           {task.status === 'postponed' && (
@@ -1082,7 +1271,7 @@ export default function App() {
                         onClick={() => handleQuickAdd(amount)}
                         className="py-2.5 bg-app-surface dark:bg-app-border/10 hover:bg-app-accent hover:text-white text-app-accent rounded-xl text-[10px] font-black transition-all active:scale-95 border border-app-border"
                       >
-                        +{amount.toLocaleString('ar-EG')}
+                        +{amount.toLocaleString('en-US')}
                       </button>
                     ))}
                   </div>
@@ -1141,6 +1330,24 @@ export default function App() {
                         />
                       </motion.div>
                     )}
+                  </div>
+
+                  {/* Tags Input */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-[9px] font-black text-app-muted uppercase px-2">
+                       <Tag className="w-3 h-3" />
+                       الوسوم (اختياري)
+                    </div>
+                    <div className="bg-app-bg dark:bg-app-border/10 border border-app-border p-3 rounded-2xl focus-within:border-app-accent transition-all">
+                      <input 
+                        type="text"
+                        placeholder="مثال: سفر هدايا عمل..."
+                        className="w-full bg-transparent outline-none text-xs font-bold text-app-accent placeholder:text-app-muted/30"
+                        value={tagsInput}
+                        onChange={(e) => setTagsInput(e.target.value)}
+                      />
+                    </div>
+                    <p className="text-[8px] text-app-muted px-2">افصل بين الوسوم بمسافات</p>
                   </div>
                 </div>
 
@@ -1246,6 +1453,74 @@ export default function App() {
                   >
                     إلغاء
                   </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Budget Modal */}
+      <AnimatePresence>
+        {showBudgetModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-app-accent/10 dark:bg-black/40 backdrop-blur-[2px]"
+              onClick={() => setShowBudgetModal(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 40 }}
+              className="bg-app-bg dark:bg-app-surface w-full max-w-sm rounded-[40px] p-6 shadow-2xl relative z-10 border border-app-border"
+            >
+              <div className="flex flex-col items-center">
+                <div className="flex items-center justify-between w-full mb-6">
+                  <div className="w-10 h-10 bg-app-accent/10 rounded-full flex items-center justify-center">
+                    <Wallet className="w-5 h-5 text-app-accent" />
+                  </div>
+                  <h3 className="text-xl font-black text-app-text">تحديد ميزانية الشهر</h3>
+                  <button onClick={() => setShowBudgetModal(false)} className="p-2 hover:bg-app-surface rounded-full text-app-muted">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="w-full space-y-6">
+                  <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-6 rounded-[28px] text-center focus-within:border-app-accent transition-all relative">
+                    <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-app-muted text-sm">{analyticsCurrency}</span>
+                    <input 
+                      type="number" 
+                      placeholder="0.00"
+                      value={budgetInput}
+                      onChange={(e) => setBudgetInput(e.target.value)}
+                      className="w-full bg-transparent text-4xl font-black text-app-accent outline-none text-center placeholder:text-app-border"
+                      autoFocus
+                    />
+                  </div>
+                  
+                  <div className="bg-app-accent/5 p-4 rounded-2xl border border-app-accent/10">
+                    <p className="text-[10px] text-app-muted font-bold leading-relaxed">
+                      سيتم استخدام هذه القيمة لمراقبة مصروفاتك بالـ {analyticsCurrency} خلال التقارير.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 w-full">
+                    <button 
+                      onClick={() => setShowBudgetModal(false)}
+                      className="bg-app-surface dark:bg-app-border/10 text-app-muted font-black py-4 rounded-2xl hover:bg-app-border/20 transition-colors text-sm"
+                    >
+                      إلغاء
+                    </button>
+                    <button 
+                      onClick={setBudget}
+                      className="bg-app-accent hover:opacity-95 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-app-accent/20 active:scale-95 text-sm"
+                    >
+                      تأكيد
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
