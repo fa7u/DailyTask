@@ -347,8 +347,8 @@ export default function App() {
 
   const chartColors = useMemo(() => {
     return isDarkMode 
-      ? ['#a1a195', '#8a8a60', '#5a5a40', '#3a3a30'] 
-      : ['#5a5a40', '#8a8a7c', '#c4c4bc', '#ecece4'];
+      ? ['#96968c', '#8a8a60', '#5a5a40', '#262624'] 
+      : ['#5a5a40', '#7c7c72', '#b8b8b0', '#eeeeea'];
   }, [isDarkMode]);
   const chartData = useMemo(() => {
     const groups: Record<string, number> = {};
@@ -480,30 +480,30 @@ export default function App() {
                 <div className="h-[300px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDarkMode ? '#2d2d2a' : '#f0f0e8'} />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDarkMode ? '#262624' : '#eeeeea'} />
                       <XAxis 
                         dataKey="name" 
                         axisLine={false} 
                         tickLine={false} 
-                        tick={{ fill: isDarkMode ? '#a1a195' : '#8a8a7c', fontSize: 12, fontWeight: 'bold' }} 
+                        tick={{ fill: isDarkMode ? '#96968c' : '#7c7c72', fontSize: 12, fontWeight: 'bold' }} 
                         dy={10}
                       />
                       <YAxis 
                         axisLine={false} 
                         tickLine={false} 
-                        tick={{ fill: isDarkMode ? '#a1a195' : '#8a8a7c', fontSize: 10 }} 
+                        tick={{ fill: isDarkMode ? '#96968c' : '#7c7c72', fontSize: 10 }} 
                       />
                       <Tooltip 
-                        cursor={{ fill: isDarkMode ? '#2d2d2a' : '#f5f5f0' }}
+                        cursor={{ fill: isDarkMode ? '#262624' : '#f8f9f8' }}
                         contentStyle={{ 
-                          backgroundColor: isDarkMode ? '#1a1a18' : '#fff', 
+                          backgroundColor: isDarkMode ? '#141413' : '#ffffff', 
                           borderRadius: '16px', 
-                          border: isDarkMode ? '1px solid #2d2d2a' : '1px solid #f0f0e8',
+                          border: isDarkMode ? '1px solid #262624' : '1px solid #eeeeea',
                           boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                          color: isDarkMode ? '#e5e5e0' : '#333330',
+                          color: isDarkMode ? '#e8e8e2' : '#2d2d2a',
                           fontFamily: 'inherit'
                         }}
-                        itemStyle={{ color: isDarkMode ? '#e5e5e0' : '#333330' }}
+                        itemStyle={{ color: isDarkMode ? '#e8e8e2' : '#2d2d2a' }}
                       />
                       <Bar dataKey="amount" radius={[8, 8, 0, 0]} barSize={40}>
                         {chartData.map((entry, index) => (
@@ -575,7 +575,7 @@ export default function App() {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="bg-app-surface dark:bg-black/10 border border-app-border rounded-[24px] p-6 space-y-6">
+                  <div className="bg-app-surface dark:bg-app-bg border border-app-border rounded-[24px] p-6 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {/* Sorting */}
                       <div className="space-y-3">
@@ -730,7 +730,7 @@ export default function App() {
                         {Object.keys(groupTotals).length > 0 && (
                           <div className="flex gap-2">
                             {Object.entries(groupTotals).map(([currency, total]) => (
-                              <span key={currency} className="text-[10px] font-black text-app-accent bg-app-bg dark:bg-black/20 border border-app-border px-3 py-1 rounded-lg shadow-sm">
+                              <span key={currency} className="text-[10px] font-black text-app-accent bg-app-surface dark:bg-app-bg border border-app-border px-3 py-1 rounded-lg shadow-sm">
                                 {total.toLocaleString('ar-EG')} {currency}
                               </span>
                             ))}
@@ -780,7 +780,7 @@ export default function App() {
                                           deleteTask(task.id);
                                         }
                                       }}
-                                      className="bg-white dark:bg-[#1a1a18] border border-app-border rounded-[16px] p-2.5 shadow-sm hover:shadow-md transition-all relative z-10 cursor-grab active:cursor-grabbing"
+                                      className="bg-app-surface dark:bg-app-surface border border-app-border rounded-[16px] p-2.5 shadow-sm hover:shadow-md transition-all relative z-10 cursor-grab active:cursor-grabbing"
                                     >
                                       {/* Task Card Content */}
                                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -943,14 +943,14 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-[2px]"
+              className="absolute inset-0 bg-app-accent/10 dark:bg-black/40 backdrop-blur-[2px]"
               onClick={() => setShowPriceModal({ isOpen: false, taskId: null })}
             />
             <motion.div 
               initial={{ scale: 0.9, opacity: 0, y: 40 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 40 }}
-              className="bg-app-bg dark:bg-[#1a1a18] w-full max-w-sm rounded-[40px] p-6 shadow-2xl relative z-10 border border-app-border max-h-[90vh] overflow-y-auto scrollbar-hide"
+              className="bg-app-bg dark:bg-app-surface w-full max-w-sm rounded-[40px] p-6 shadow-2xl relative z-10 border border-app-border max-h-[90vh] overflow-y-auto scrollbar-hide"
             >
               <div className="flex flex-col items-center">
                 <div className="flex items-center justify-between w-full mb-4">
@@ -987,7 +987,7 @@ export default function App() {
                   </div>
 
                   {/* Price Display */}
-                  <div className="bg-app-bg dark:bg-black/20 border-2 border-app-border p-5 rounded-[28px] relative focus-within:border-app-accent transition-all group">
+                  <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-5 rounded-[28px] relative focus-within:border-app-accent transition-all group">
                     <div className="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-black text-app-muted">
                       {currencyInput}
                     </div>
@@ -1015,7 +1015,7 @@ export default function App() {
                   </div>
 
                   {/* Custom Numpad */}
-                  <div className="grid grid-cols-3 gap-2 bg-app-surface dark:bg-black/10 p-2 rounded-[32px] border border-app-border">
+                  <div className="grid grid-cols-3 gap-2 bg-app-surface dark:bg-app-border border border-app-border">
                     {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'].map((key) => (
                       <button
                         key={key}
@@ -1057,7 +1057,7 @@ export default function App() {
                       <motion.div 
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="bg-app-surface dark:bg-black/10 p-1 rounded-2xl border border-app-border"
+                        className="bg-app-surface dark:bg-app-bg p-1 rounded-2xl border border-app-border"
                       >
                         <input 
                           type="text"
@@ -1100,14 +1100,14 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-[2px]"
+              className="absolute inset-0 bg-app-accent/10 dark:bg-black/40 backdrop-blur-[2px]"
               onClick={() => setShowDeleteModal({ isOpen: false, taskId: null })}
             />
             <motion.div 
               initial={{ scale: 0.9, opacity: 0, y: 40 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 40 }}
-              className="bg-app-bg dark:bg-[#1a1a18] w-full max-w-xs rounded-[32px] p-6 shadow-2xl relative z-10 border border-app-border"
+              className="bg-app-bg dark:bg-app-surface w-full max-w-xs rounded-[32px] p-6 shadow-2xl relative z-10 border border-app-border"
             >
               <div className="flex flex-col items-center text-center">
                 <div className="w-14 h-14 bg-red-50 dark:bg-red-950/20 rounded-full flex items-center justify-center mb-4">
