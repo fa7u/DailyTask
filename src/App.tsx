@@ -21,6 +21,8 @@ import {
   Repeat,
   Delete,
   Download,
+  CreditCard,
+  Banknote,
 } from 'lucide-react';
 import {
   BarChart,
@@ -44,6 +46,7 @@ interface Task {
   price?: number;
   currency?: string;
   category?: string;
+  paymentMethod?: 'cash' | 'card';
   date?: string;
   createdAt: string;
   tags?: string[];
@@ -116,6 +119,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('الكل');
   const [filterTag, setFilterTag] = useState('');
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState<'all' | 'cash' | 'card'>('all');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'price-high' | 'price-low'>('newest');
@@ -132,6 +136,7 @@ export default function App() {
   });
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
 
   // --- Handlers ---
   useEffect(() => {
@@ -231,7 +236,9 @@ export default function App() {
     const task = tasks.find(t => t.id === id);
     if (task && task.status === 'completed') {
       setPriceInput(task.price?.toString() || '');
-      setCurrencyInput(task.currency || CURRENCIES[0].code);
+      const currency = task.currency || CURRENCIES[0].code;
+      setCurrencyInput(currency);
+      setPaymentMethod(task.paymentMethod || (currency === '⃁' ? 'card' : 'cash'));
       setTagsInput(task.tags?.join(' ') || '');
       if (CATEGORIES.includes(task.category || '')) {
         setCategoryInput(task.category || CATEGORIES[0]);
@@ -243,7 +250,9 @@ export default function App() {
     } else {
       setPriceInput('');
       setCategoryInput(CATEGORIES[0]);
-      setCurrencyInput(CURRENCIES[0].code);
+      const initialCurrency = CURRENCIES[0].code;
+      setCurrencyInput(initialCurrency);
+      setPaymentMethod(initialCurrency === '⃁' ? 'card' : 'cash');
       setCustomCategory('');
       setTagsInput('');
     }
@@ -269,6 +278,7 @@ export default function App() {
             price,
             currency: currencyInput,
             category: finalCategory,
+            paymentMethod,
             tags,
             date: t.status === 'completed' ? t.date : new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit', numberingSystem: 'latn' }) 
           } 
@@ -379,6 +389,11 @@ export default function App() {
     // Tag filter
     if (filterTag) {
       result = result.filter(t => t.tags?.includes(filterTag));
+    }
+
+    // Payment Method filter
+    if (filterPaymentMethod !== 'all') {
+      result = result.filter(t => t.paymentMethod === filterPaymentMethod);
     }
 
     // Date Range filter
@@ -823,6 +838,23 @@ export default function App() {
                         </select>
                       </div>
 
+                      {/* Payment Method Filter */}
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-app-muted uppercase flex items-center gap-2 px-1">
+                          <Wallet className="w-3.5 h-3.5" />
+                          طريقة الدفع
+                        </label>
+                        <select 
+                          className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm font-bold text-app-accent outline-none appearance-none"
+                          value={filterPaymentMethod}
+                          onChange={(e) => setFilterPaymentMethod(e.target.value as any)}
+                        >
+                          <option value="all">الكل</option>
+                          <option value="cash">كاش</option>
+                          <option value="card">بطاقة</option>
+                        </select>
+                      </div>
+
                       {/* Price Range */}
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-app-muted uppercase flex items-center gap-2 px-1">
@@ -882,6 +914,7 @@ export default function App() {
                           setSearchQuery('');
                           setFilterCategory('الكل');
                           setFilterTag('');
+                          setFilterPaymentMethod('all');
                           setMinPrice('');
                           setMaxPrice('');
                           setSortBy('newest');
@@ -1045,7 +1078,12 @@ export default function App() {
                                           <h3 className="font-bold text-app-text text-[13px] mb-0.5">{task.text}</h3>
                                           {task.status === 'completed' && (
                                             <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                                              <span className="text-app-accent font-bold text-[9px] bg-app-surface px-2 py-0.5 rounded-lg border border-app-border">
+                                              <span className="text-app-accent font-bold text-[9px] bg-app-surface px-2 py-0.5 rounded-lg border border-app-border flex items-center gap-1.5 shadow-sm">
+                                                 {task.paymentMethod === 'card' ? (
+                                                   <CreditCard className="w-2.5 h-2.5 opacity-60" />
+                                                 ) : (
+                                                   <Banknote className="w-2.5 h-2.5 opacity-60" />
+                                                 )}
                                                  {task.price?.toLocaleString('en-US')} {task.currency || 'ر.ي'}
                                               </span>
                                               {task.category && (
@@ -1236,7 +1274,10 @@ export default function App() {
                     {CURRENCIES.map((c) => (
                       <button
                         key={c.code}
-                        onClick={() => setCurrencyInput(c.code)}
+                        onClick={() => {
+                          setCurrencyInput(c.code);
+                          setPaymentMethod(c.code === '⃁' ? 'card' : 'cash');
+                        }}
                         className={`flex-1 py-2.5 rounded-xl text-[10px] font-black transition-all ${
                           currencyInput === c.code 
                             ? 'bg-app-bg text-app-accent shadow-sm' 
@@ -1291,6 +1332,38 @@ export default function App() {
                         {key === 'backspace' ? <Delete className="w-6 h-6" /> : key}
                       </button>
                     ))}
+                  </div>
+
+                  {/* Payment Method Selector */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-[9px] font-black text-app-muted uppercase px-2">
+                       <Wallet className="w-3 h-3" />
+                       طريقة الدفع
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                       <button
+                         onClick={() => setPaymentMethod('cash')}
+                         className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[11px] font-black transition-all border ${
+                           paymentMethod === 'cash' 
+                             ? 'bg-emerald-500 text-white border-emerald-500 shadow-md' 
+                             : 'bg-app-bg dark:bg-app-border/20 text-app-muted border-app-border'
+                         }`}
+                       >
+                         <Banknote className="w-4 h-4" />
+                         كاش
+                       </button>
+                       <button
+                         onClick={() => setPaymentMethod('card')}
+                         className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[11px] font-black transition-all border ${
+                           paymentMethod === 'card' 
+                             ? 'bg-blue-500 text-white border-blue-500 shadow-md' 
+                             : 'bg-app-bg dark:bg-app-border/20 text-app-muted border-app-border'
+                         }`}
+                       >
+                         <CreditCard className="w-4 h-4" />
+                         بطاقة
+                       </button>
+                    </div>
                   </div>
 
                   {/* Category Selection */}
