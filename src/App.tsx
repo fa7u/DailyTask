@@ -274,10 +274,7 @@ export default function App() {
 
   const exportToCSV = () => {
     const completedTasks = tasks.filter(t => t.status === 'completed');
-    if (completedTasks.length === 0) {
-      alert('لا توجد مهام منجزة لتصديرها');
-      return;
-    }
+    if (completedTasks.length === 0) return;
 
     const totalsByCurrency: Record<string, number> = {};
     completedTasks.forEach(t => {
@@ -286,30 +283,34 @@ export default function App() {
     });
 
     const headers = ['المهمة', 'السعر', 'العملة', 'الفئة', 'التاريخ'];
-    const csvContent = [
-      headers.join(','),
-      ...completedTasks.map(t => [
-        `"${t.text.replace(/"/g, '""')}"`,
-        t.price || 0,
-        `"${t.currency || 'ر.ي'}"`,
-        `"${(t.category || 'أخرى').replace(/"/g, '""')}"`,
-        `"${t.date || ''}"`
-      ].join(',')),
+    const rows = completedTasks.map(t => [
+      `"${t.text.replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+      t.price || 0,
+      `"${t.currency || 'ر.ي'}"`,
+      `"${(t.category || 'أخرى').replace(/"/g, '""')}"`,
+      `"${t.date || ''}"`
+    ].join(','));
+
+    const totalsSection = [
       '',
-      '--- المجموع الكلي حسب العملة ---',
+      '"--- المجموع الكلي حسب العملة ---"',
       'العملة,المبلغ',
       ...Object.entries(totalsByCurrency).map(([cur, amount]) => `"${cur}",${amount}`)
-    ].join('\n');
+    ];
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
+    const csvContent = [headers.join(','), ...rows, ...totalsSection].join('\r\n');
+    const blob = new Blob(['\ufeff', csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `مصروفاتي_المنجزة_${new Date().toLocaleDateString('ar-EG')}.csv`);
-    link.style.visibility = 'hidden';
+    const link = document.createElement('a');
+    link.href = url;
+    
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.download = `sarfiah_report_${dateStr}.csv`;
+    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
   const clearAllCompleted = () => {
