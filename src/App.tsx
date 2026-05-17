@@ -364,8 +364,8 @@ export default function App() {
   return (
     <div dir="rtl" className="min-h-screen bg-app-bg font-sans pb-28 overflow-x-hidden text-app-text">
       {/* Header */}
-      <header className="bg-app-surface border-b border-app-border sticky top-0 z-30 px-6 py-5 md:py-8">
-        <div className="max-w-2xl mx-auto flex justify-between items-center">
+      <header className="bg-app-surface border-b border-app-border sticky top-0 z-30 px-4 sm:px-6 py-5 md:py-8">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-app-accent rounded-xl flex items-center justify-center text-white shadow-md overflow-hidden">
               <Wallet className="w-8 h-8" />
@@ -419,7 +419,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 mt-8">
+      <main className="max-w-4xl mx-auto px-4 mt-8">
         {/* Add Task Input */}
         {activeTab === 'pending' && (
           <motion.div 
@@ -513,14 +513,14 @@ export default function App() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-10 space-y-4">
+                <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4">
                   {chartData.map((item, i) => (
                     <div key={item.name} className="flex justify-between items-center p-4 bg-app-surface dark:bg-app-border/10 rounded-2xl border border-app-border/50">
                       <div className="flex items-center gap-3">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: chartColors[i % chartColors.length] }} />
-                        <span className="font-bold text-app-text">{item.name}</span>
+                        <span className="font-bold text-app-text text-sm">{item.name}</span>
                       </div>
-                      <span className="font-black text-app-accent">{item.amount.toLocaleString('ar-EG')} {analyticsCurrency}</span>
+                      <span className="font-black text-app-accent text-sm whitespace-nowrap">{item.amount.toLocaleString('ar-EG')} {analyticsCurrency}</span>
                     </div>
                   ))}
                 </div>
@@ -746,7 +746,7 @@ export default function App() {
                             exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden"
                           >
-                            <div className="space-y-4 pt-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                               <AnimatePresence mode="popLayout">
                                 {dateTasks.map((task) => (
                                   <motion.div
@@ -1151,7 +1151,7 @@ function TabButton({ active, icon, label, onClick, id }: { active: boolean; icon
       <div className={`transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>
         {icon}
       </div>
-      <span className={`text-sm font-bold transition-all ${active ? 'block' : 'hidden'}`}>
+      <span className={`text-sm font-bold transition-all ${active ? 'block' : 'hidden md:block'}`}>
         {label}
       </span>
     </button>
