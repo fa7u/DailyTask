@@ -427,11 +427,11 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-10"
           >
-            <div className="bg-app-bg dark:bg-app-surface p-2.5 rounded-3xl shadow-sm border border-app-border flex gap-3 ring-8 ring-app-surface/50 dark:ring-app-accent/10">
+            <div className="bg-app-bg dark:bg-app-surface p-2 rounded-2xl sm:p-2.5 sm:rounded-3xl shadow-sm border border-app-border flex gap-2 sm:gap-3 ring-4 sm:ring-8 ring-app-surface/50 dark:ring-app-accent/10">
               <input 
                 type="text" 
                 placeholder="أضف غرضاً جديداً للقائمة..."
-                className="flex-1 px-5 py-4 bg-transparent outline-none text-app-text font-medium placeholder:text-app-muted/50 text-base"
+                className="flex-1 px-3 sm:px-5 py-3 sm:py-4 bg-transparent outline-none text-app-text font-medium placeholder:text-app-muted/50 text-sm sm:text-base min-w-0"
                 value={newTaskText}
                 onChange={(e) => setNewTaskText(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addTask()}
@@ -439,10 +439,10 @@ export default function App() {
               <button 
                 id="add-btn"
                 onClick={addTask}
-                className="bg-app-accent hover:opacity-90 text-white px-6 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-app-accent/20 active:scale-95"
+                className="bg-app-accent hover:opacity-90 text-white px-4 sm:px-6 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-app-accent/20 active:scale-95 shrink-0"
               >
-                <Plus className="w-6 h-6 ml-2" />
-                <span className="font-bold">إضافة</span>
+                <Plus className="w-5 h-5 sm:w-6 sm:h-6 sm:ml-2" />
+                <span className="font-bold hidden sm:block">إضافة</span>
               </button>
             </div>
           </motion.div>
@@ -536,34 +536,34 @@ export default function App() {
         )}
 
         {/* Search and Filters */}
-        {activeTab !== 'analytics' && activeTab !== 'pending' && (
+        {activeTab !== 'analytics' && (
           <div className="mb-6 space-y-4">
-            <div className="flex gap-3">
-              <div className="flex-1 bg-app-bg dark:bg-app-surface border border-app-border rounded-2xl flex items-center px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-app-accent/20 transition-all">
-                <Search className="w-5 h-5 text-app-muted ml-3" />
+            <div className="flex gap-2 sm:gap-3">
+              <div className="flex-1 bg-app-bg dark:bg-app-surface border border-app-border rounded-xl sm:rounded-2xl flex items-center px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm focus-within:ring-2 focus-within:ring-app-accent/20 transition-all">
+                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-app-muted ml-2 sm:ml-3 shrink-0" />
                 <input 
                   type="text" 
-                  placeholder="ابحث في قائمة المشتريات..."
-                  className="flex-1 bg-transparent outline-none text-sm font-medium placeholder:text-app-muted/40"
+                  placeholder="ابحث..."
+                  className="flex-1 bg-transparent outline-none text-xs sm:text-sm font-medium placeholder:text-app-muted/40 min-w-0"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="p-1 hover:bg-app-surface rounded-lg text-app-muted">
+                  <button onClick={() => setSearchQuery('')} className="p-1 hover:bg-app-surface rounded-lg text-app-muted shrink-0">
                     <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
               <button 
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-5 rounded-2xl font-bold text-sm transition-all border ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm transition-all border shrink-0 ${
                   showFilters 
                     ? 'bg-app-accent text-white border-app-accent shadow-lg shadow-app-accent/20' 
                     : 'bg-app-bg dark:bg-app-surface text-app-muted border-app-border hover:bg-app-surface'
                 }`}
               >
                 <SlidersHorizontal className="w-4 h-4" />
-                تصفية
+                <span>تصفية</span>
               </button>
             </div>
 
@@ -1144,7 +1144,7 @@ function TabButton({ active, icon, label, onClick, id }: { active: boolean; icon
     <button 
       id={id}
       onClick={onClick}
-      className={`relative flex items-center gap-3 px-6 py-4 rounded-3xl transition-all group ${
+      className={`relative flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl sm:rounded-3xl transition-all group shrink-0 ${
         active ? 'bg-app-accent text-white shadow-xl shadow-app-accent/30' : 'text-app-muted hover:bg-app-surface'
       }`}
     >
