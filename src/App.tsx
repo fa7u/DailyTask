@@ -321,14 +321,21 @@ export default function App() {
       totalsByCurrency[cur] = (totalsByCurrency[cur] || 0) + (t.price || 0);
     });
 
-    const headers = ['المهمة', 'السعر', 'العملة', 'الفئة', 'التاريخ'];
-    const rows = completedTasks.map(t => [
-      `"${t.text.replace(/"/g, '""').replace(/\n/g, ' ')}"`,
-      t.price || 0,
-      `"${t.currency || 'ر.ي'}"`,
-      `"${(t.category || 'أخرى').replace(/"/g, '""')}"`,
-      `"${t.date || ''}"`
-    ].join(','));
+    const headers = ['المهمة', 'السعر', 'العملة', 'طريقة الدفع', 'الفئة', 'التاريخ'];
+    const rows = completedTasks.map(t => {
+      const defaultMethod = t.currency === '⃁' ? 'card' : 'cash';
+      const method = t.paymentMethod || defaultMethod;
+      const methodLabel = method === 'card' ? 'بطاقة' : 'كاش';
+
+      return [
+        `"${t.text.replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+        t.price || 0,
+        `"${t.currency || 'ر.ي'}"`,
+        `"${methodLabel}"`,
+        `"${(t.category || 'أخرى').replace(/"/g, '""')}"`,
+        `"${t.date || ''}"`
+      ].join(',');
+    });
 
     const totalsSection = [
       '',
@@ -372,8 +379,9 @@ export default function App() {
     setShowBudgetModal(false);
   };
 
-  const filteredTasks = useMemo(() => {
-    let result = tasks.filter(t => t.status === activeTab);
+  // 1. Base filtering (Global filters)
+  const baseFilteredTasks = useMemo(() => {
+    let result = [...tasks];
 
     // Search filter
     if (searchQuery.trim()) {
@@ -393,7 +401,11 @@ export default function App() {
 
     // Payment Method filter
     if (filterPaymentMethod !== 'all') {
-      result = result.filter(t => t.paymentMethod === filterPaymentMethod);
+      result = result.filter(t => {
+        const defaultMethod = t.currency === '⃁' ? 'card' : 'cash';
+        const method = t.paymentMethod || defaultMethod;
+        return method === filterPaymentMethod;
+      });
     }
 
     // Date Range filter
@@ -414,6 +426,13 @@ export default function App() {
       result = result.filter(t => (t.price || 0) <= parseFloat(maxPrice));
     }
 
+    return result;
+  }, [tasks, searchQuery, filterCategory, filterTag, filterPaymentMethod, minPrice, maxPrice, dateFrom, dateTo]);
+
+  // 2. Filtered tasks for the list (adds status filter + sorting)
+  const filteredTasks = useMemo(() => {
+    let result = baseFilteredTasks.filter(t => t.status === activeTab);
+
     // Sorting
     result.sort((a, b) => {
       if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -424,7 +443,7 @@ export default function App() {
     });
 
     return result;
-  }, [tasks, activeTab, searchQuery, filterCategory, minPrice, maxPrice, sortBy]);
+  }, [baseFilteredTasks, activeTab, sortBy]);
   
   // Group tasks by date
   const groupedTasks = useMemo(() => {
@@ -436,12 +455,7 @@ export default function App() {
       if (groupBy === 'daily') {
         dateKey = task.date || date.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit', numberingSystem: 'latn' });
       } else if (groupBy === 'weekly') {
-        // Find start of week (Saturday in many Arab countries, but Sunday is fine too)
         const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 6 ? -6 : 0); // This is a bit complex without a lib, let's simplify
-        
-        // Simple: "Week of [Date]"
         const firstDay = new Date(d.setDate(d.getDate() - d.getDay()));
         dateKey = `أسبوع ${firstDay.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', numberingSystem: 'latn' })} - ${new Date(firstDay.setDate(firstDay.getDate() + 6)).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric', numberingSystem: 'latn' })}`;
       } else if (groupBy === 'monthly') {
@@ -456,15 +470,15 @@ export default function App() {
     return groups;
   }, [filteredTasks, groupBy]);
 
-  // Calculate total expenses from completed tasks (grouped by currency)
+  // Calculate total expenses from completed tasks (based on filtered tasks)
   const totalsByCurrency = useMemo(() => {
     const totals: Record<string, number> = {};
-    tasks.filter(t => t.status === 'completed').forEach(t => {
+    baseFilteredTasks.filter(t => t.status === 'completed').forEach(t => {
       const cur = t.currency || 'ر.ي';
       totals[cur] = (totals[cur] || 0) + (t.price || 0);
     });
     return totals;
-  }, [tasks]);
+  }, [baseFilteredTasks]);
 
   const chartColors = useMemo(() => {
     return isDarkMode 
@@ -474,14 +488,27 @@ export default function App() {
 
   const chartData = useMemo(() => {
     const groups: Record<string, number> = {};
-    tasks
+    baseFilteredTasks
       .filter(t => t.status === 'completed' && (t.currency || 'ر.ي') === analyticsCurrency)
       .forEach(t => {
         const cat = t.category || 'أخرى';
         groups[cat] = (groups[cat] || 0) + (t.price || 0);
       });
     return Object.entries(groups).map(([name, amount]) => ({ name, amount }));
-  }, [tasks, analyticsCurrency]);
+  }, [baseFilteredTasks, analyticsCurrency]);
+  
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (searchQuery.trim()) count++;
+    if (filterCategory !== 'الكل') count++;
+    if (filterTag) count++;
+    if (filterPaymentMethod !== 'all') count++;
+    if (minPrice) count++;
+    if (maxPrice) count++;
+    if (dateFrom) count++;
+    if (dateTo) count++;
+    return count;
+  }, [searchQuery, filterCategory, filterTag, filterPaymentMethod, minPrice, maxPrice, dateFrom, dateTo]);
 
   const progressPercentage = useMemo(() => {
     const budget = monthlyBudgets[analyticsCurrency];
@@ -741,8 +768,7 @@ export default function App() {
         )}
 
         {/* Search and Filters */}
-        {activeTab !== 'analytics' && (
-          <div className="mb-6 space-y-4">
+        <div className="mb-6 space-y-4">
             <div className="flex gap-2 sm:gap-3">
               <div className="flex-1 bg-app-bg dark:bg-app-surface border border-app-border rounded-xl sm:rounded-2xl flex items-center px-3 sm:px-4 py-2.5 sm:py-3 shadow-sm focus-within:ring-2 focus-within:ring-app-accent/20 transition-all">
                 <Search className="w-4 h-4 sm:w-5 sm:h-5 text-app-muted ml-2 sm:ml-3 shrink-0" />
@@ -761,14 +787,25 @@ export default function App() {
               </div>
               <button 
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm transition-all border shrink-0 ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm transition-all border shrink-0 relative ${
                   showFilters 
                     ? 'bg-app-accent text-white border-app-accent shadow-lg shadow-app-accent/20' 
-                    : 'bg-app-bg dark:bg-app-surface text-app-muted border-app-border hover:bg-app-surface'
+                    : activeFiltersCount > 0
+                      ? 'bg-app-accent/10 text-app-accent border-app-accent/30'
+                      : 'bg-app-bg dark:bg-app-surface text-app-muted border-app-border hover:bg-app-surface'
                 }`}
               >
                 <SlidersHorizontal className="w-4 h-4" />
                 <span>تصفية</span>
+                {activeFiltersCount > 0 && (
+                  <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-sm border ${
+                    showFilters 
+                      ? 'bg-white text-app-accent border-white' 
+                      : 'bg-app-accent text-white border-app-accent'
+                  }`}>
+                    {activeFiltersCount}
+                  </span>
+                )}
               </button>
             </div>
 
@@ -931,8 +968,7 @@ export default function App() {
               )}
             </AnimatePresence>
           </div>
-        )}
-
+        
         {/* Group By Selector */}
         {activeTab !== 'analytics' && activeTab !== 'pending' && (
           <div className="mb-10 flex justify-center mt-2">
