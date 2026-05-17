@@ -20,6 +20,7 @@ import {
   Pencil,
   Repeat,
   Delete,
+  Download,
 } from 'lucide-react';
 import {
   BarChart,
@@ -100,6 +101,7 @@ export default function App() {
     isOpen: false,
     taskId: null
   });
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
   const [priceInput, setPriceInput] = useState('');
   const [categoryInput, setCategoryInput] = useState(CATEGORIES[0]);
   const [currencyInput, setCurrencyInput] = useState(CURRENCIES[0].code);
@@ -268,6 +270,55 @@ export default function App() {
   const handleQuickAdd = (amount: number) => {
     const current = parseFloat(priceInput) || 0;
     setPriceInput((current + amount).toString());
+  };
+
+  const exportToCSV = () => {
+    const completedTasks = tasks.filter(t => t.status === 'completed');
+    if (completedTasks.length === 0) {
+      alert('لا توجد مهام منجزة لتصديرها');
+      return;
+    }
+
+    const totalsByCurrency: Record<string, number> = {};
+    completedTasks.forEach(t => {
+      const cur = t.currency || 'ر.ي';
+      totalsByCurrency[cur] = (totalsByCurrency[cur] || 0) + (t.price || 0);
+    });
+
+    const headers = ['المهمة', 'السعر', 'العملة', 'الفئة', 'التاريخ'];
+    const csvContent = [
+      headers.join(','),
+      ...completedTasks.map(t => [
+        `"${t.text.replace(/"/g, '""')}"`,
+        t.price || 0,
+        `"${t.currency || 'ر.ي'}"`,
+        `"${(t.category || 'أخرى').replace(/"/g, '""')}"`,
+        `"${t.date || ''}"`
+      ].join(',')),
+      '',
+      '--- المجموع الكلي حسب العملة ---',
+      'العملة,المبلغ',
+      ...Object.entries(totalsByCurrency).map(([cur, amount]) => `"${cur}",${amount}`)
+    ].join('\n');
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `مصروفاتي_المنجزة_${new Date().toLocaleDateString('ar-EG')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const clearAllCompleted = () => {
+    setShowClearAllModal(true);
+  };
+
+  const confirmClearAll = () => {
+    setTasks(prev => prev.filter(t => t.status !== 'completed'));
+    setShowClearAllModal(false);
   };
 
   const filteredTasks = useMemo(() => {
@@ -695,6 +746,24 @@ export default function App() {
                   {filteredTasks.length}
                 </span>
               </h2>
+              {activeTab === 'completed' && filteredTasks.length > 0 && (
+                <div className="flex gap-2">
+                  <button 
+                    onClick={exportToCSV}
+                    className="flex items-center gap-2 px-4 py-2 bg-app-surface border border-app-border rounded-xl text-xs font-bold text-app-accent hover:bg-app-accent hover:text-white transition-all shadow-sm active:scale-95"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>تصدير CSV</span>
+                  </button>
+                  <button 
+                    onClick={clearAllCompleted}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-950/20 border border-red-500/10 rounded-xl text-xs font-bold text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-95"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>حذف الكل</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* List with grouping */}
@@ -1125,6 +1194,50 @@ export default function App() {
                   </button>
                   <button 
                     onClick={() => setShowDeleteModal({ isOpen: false, taskId: null })}
+                    className="flex-1 bg-app-surface dark:bg-app-border/10 text-app-muted font-bold py-3.5 rounded-xl hover:bg-app-border/20 transition-colors text-sm"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Clear All Confirmation Modal */}
+      <AnimatePresence>
+        {showClearAllModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-app-accent/10 dark:bg-black/40 backdrop-blur-[2px]"
+              onClick={() => setShowClearAllModal(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 40 }}
+              className="bg-app-bg dark:bg-app-surface w-full max-w-xs rounded-[32px] p-6 shadow-2xl relative z-10 border border-app-border"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-14 h-14 bg-red-50 dark:bg-red-950/20 rounded-full flex items-center justify-center mb-4">
+                   <Trash2 className="w-7 h-7 text-red-500" />
+                </div>
+                <h3 className="text-xl font-bold text-app-text mb-2">حذف جميع المنجزات؟</h3>
+                <p className="text-app-muted text-sm mb-6 leading-relaxed">سيتم حذف كافة المهام المنجزة بشكل دائم. هل أنت متأكد؟</p>
+                
+                <div className="flex gap-3 w-full">
+                  <button 
+                    onClick={confirmClearAll}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-red-500/20 active:scale-95 text-sm"
+                  >
+                    نعم، حذف الكل
+                  </button>
+                  <button 
+                    onClick={() => setShowClearAllModal(false)}
                     className="flex-1 bg-app-surface dark:bg-app-border/10 text-app-muted font-bold py-3.5 rounded-xl hover:bg-app-border/20 transition-colors text-sm"
                   >
                     إلغاء
