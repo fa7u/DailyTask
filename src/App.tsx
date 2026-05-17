@@ -1265,7 +1265,7 @@ export default function App() {
 
                   {/* Quick Increment Buttons */}
                   <div className="grid grid-cols-4 gap-2">
-                    {[100, 500, 1000, 5000].map((amount) => (
+                    {[5, 10, 100, 500, 1000, 5000, 10000].map((amount) => (
                       <button
                         key={amount}
                         onClick={() => handleQuickAdd(amount)}
