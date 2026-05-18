@@ -1,4 +1,4 @@
-import { useState, useEffect, ReactNode, useMemo } from 'react';
+import React, { useState, useEffect, ReactNode, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sun,
@@ -83,6 +83,52 @@ const CURRENCIES = [
   { code: '$', label: 'دولار' }
 ];
 
+// --- Sub-components ---
+const Numpad = ({ value, setValue }: { value: string, setValue: React.Dispatch<React.SetStateAction<string>> }) => {
+  return (
+    <div className="grid grid-cols-3 gap-3 bg-app-surface dark:bg-app-border/20 p-3 rounded-[32px] border border-app-border">
+      {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace', 'clear'].map((key) => {
+        if (key === 'clear') {
+          return (
+            <button
+              key={key}
+              onClick={() => setValue('')}
+              className="col-span-3 h-12 flex items-center justify-center rounded-xl text-sm font-bold transition-all active:scale-95 shadow-sm border border-transparent text-app-muted bg-app-bg dark:bg-app-border/20 hover:bg-red-50 hover:text-red-500"
+            >
+              تفريغ الحقل
+            </button>
+          );
+        }
+        return (
+          <button
+            key={key}
+            onClick={() => {
+              if (key === 'backspace') {
+                setValue(prev => prev.slice(0, -1));
+              } else if (key === '.') {
+                if (!value.includes('.')) {
+                  setValue(prev => (prev === '' ? '0.' : prev + '.'));
+                }
+              } else {
+                if (value.length < 12) {
+                  setValue(prev => (prev === '0' ? key : prev + key));
+                }
+              }
+            }}
+            className={`h-16 flex items-center justify-center rounded-2xl text-2xl font-bold transition-all active:scale-95 shadow-sm border border-transparent ${
+              key === 'backspace' 
+                ? 'text-red-500 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30' 
+                : 'text-app-text bg-app-bg dark:bg-app-border/40 hover:bg-app-surface font-mono'
+            }`}
+          >
+            {key === 'backspace' ? <Delete className="w-6 h-6 stroke-[2.5px]" /> : key}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>(() => {
     try {
@@ -164,6 +210,7 @@ export default function App() {
   const [exchangeFromCurrency, setExchangeFromCurrency] = useState(CURRENCIES[0].code);
   const [exchangeToCurrency, setExchangeToCurrency] = useState(CURRENCIES[1].code);
   const [exchangeRate, setExchangeRate] = useState('');
+  const [activeNumpadTarget, setActiveNumpadTarget] = useState<'budget' | 'exchangeFrom' | 'exchangeRate' | 'price' | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
 
   // --- Handlers ---
@@ -242,9 +289,9 @@ export default function App() {
     // Record the exchange
     const exchangeTask: Task = {
       id: `${Date.now()}-exch`,
-      text: `مصارفة: ${fromAmt.toLocaleString('en-US')} ${exchangeFromCurrency} -> ${toAmt.toLocaleString('en-US')} ${exchangeToCurrency}`,
+      text: `مصارفة: ${fromAmt.toLocaleString('en-US')} ${exchangeFromCurrency} -> ${toAmt.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${exchangeToCurrency}`,
       status: 'completed',
-      price: 0,
+      price: fromAmt,
       currency: exchangeFromCurrency,
       category: 'مصارفة',
       paymentMethod: 'cash',
@@ -300,6 +347,7 @@ export default function App() {
   };
 
   const openCompleteModal = (id: string) => {
+    setActiveNumpadTarget('price');
     const task = tasks.find(t => t.id === id);
     if (task && task.status === 'completed') {
       setModalTaskText(task.text);
@@ -362,22 +410,6 @@ export default function App() {
     setCurrencyInput(CURRENCIES[0].code);
     setCustomCategory('');
     setTagsInput('');
-  };
-
-  const handleNumpad = (val: string, type: 'price' | 'budget' = 'price') => {
-    const setInput = type === 'price' ? setPriceInput : setBudgetInput;
-    const currentInput = type === 'price' ? priceInput : budgetInput;
-
-    if (val === 'backspace') {
-      setInput(prev => prev.slice(0, -1));
-    } else if (val === '.') {
-      if (!currentInput.includes('.')) {
-        setInput(prev => (prev === '' ? '0.' : prev + '.'));
-      }
-    } else {
-      if (currentInput.length >= 12) return;
-      setInput(prev => (prev === '0' ? val : prev + val));
-    }
   };
 
   const handleQuickAdd = (amount: number, type: 'price' | 'budget' = 'price') => {
@@ -661,19 +693,15 @@ export default function App() {
               <div className="flex items-center gap-1.5 text-app-muted text-[10px] mb-1 justify-end uppercase font-bold whitespace-nowrap">
                 إجمالي المصروفات
               </div>
-              {(Object.entries(totalsByCurrency) as [string, number][]).length > 0 ? (
-                (Object.entries(totalsByCurrency) as [string, number][]).map(([currency, total]) => (
+              {(Object.entries(totalsByCurrency) as [string, number][])
+                .filter(([_, total]) => total > 0)
+                .map(([currency, total]) => (
                   <div key={currency} className="text-lg md:text-xl font-bold text-app-accent flex items-center gap-1 justify-end whitespace-nowrap">
                     <span>{isPrivate ? '••••••' : total.toLocaleString('en-US')}</span>
                     <span className="text-[10px] md:text-xs font-bold opacity-70">{currency}</span>
                   </div>
                 ))
-              ) : (
-                <div className="text-lg md:text-xl font-bold text-app-accent flex items-center gap-1 justify-end whitespace-nowrap">
-                  <span>{isPrivate ? '••••••' : '0'}</span>
-                  <span className="text-[10px] md:text-xs font-bold opacity-70">ر.ي</span>
-                </div>
-              )}
+              }
             </div>
           </div>
         </div>
@@ -714,21 +742,31 @@ export default function App() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            {/* Currency Filter for Analytics */}
-            <div className="flex bg-app-surface dark:bg-app-border/10 p-1.5 rounded-3xl mb-8 shadow-sm">
-              {CURRENCIES.map((c) => (
-                <button
-                  key={c.code}
-                  onClick={() => setAnalyticsCurrency(c.code)}
-                  className={`flex-1 py-3 px-4 rounded-2xl text-xs font-black transition-all ${
-                    analyticsCurrency === c.code 
-                      ? 'bg-app-accent text-white shadow-lg' 
-                      : 'text-app-muted hover:bg-app-surface'
-                  }`}
-                >
-                  {c.code}
-                </button>
-              ))}
+            {/* Currency Filter & Exchange Button */}
+            <div className="flex items-center gap-4 mb-8">
+              <div className="flex-1 flex bg-app-surface dark:bg-app-border/10 p-1.5 rounded-3xl shadow-sm">
+                {CURRENCIES.map((c) => (
+                  <button
+                    key={c.code}
+                    onClick={() => setAnalyticsCurrency(c.code)}
+                    className={`flex-1 py-3 px-4 rounded-2xl text-xs font-black transition-all ${
+                      analyticsCurrency === c.code 
+                        ? 'bg-app-accent text-white shadow-lg' 
+                        : 'text-app-muted hover:bg-app-surface'
+                    }`}
+                  >
+                    {c.code}
+                  </button>
+                ))}
+              </div>
+              <button 
+                onClick={() => setShowExchangeModal(true)}
+                className="bg-amber-500 text-white hover:bg-amber-600 p-4 rounded-3xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-2 group"
+                title="إجراء عملية مصارفة"
+              >
+                <RefreshCcw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+                <span className="hidden sm:block font-bold text-sm">مصارفة</span>
+              </button>
             </div>
 
             {/* Budget Section */}
@@ -739,13 +777,6 @@ export default function App() {
                   <span>الميزانية الشهرية ({analyticsCurrency})</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => setShowExchangeModal(true)}
-                    className="text-[10px] font-black text-amber-600 bg-amber-500/10 py-1.5 px-3 rounded-full hover:bg-amber-500 hover:text-white transition-all flex items-center gap-1.5"
-                  >
-                    <RefreshCcw className="w-3 h-3" />
-                    مصارفة
-                  </button>
                   <button 
                     onClick={() => {
                       setBudgetInput(monthlyBudgets[analyticsCurrency]?.toString() || '');
@@ -1168,13 +1199,15 @@ export default function App() {
                         
                         <div className="flex-1 h-[1px] bg-app-border mx-2" />
 
-                        {Object.keys(groupTotals).length > 0 && (
+                        {Object.entries(groupTotals).some(([_, total]) => total > 0) && (
                           <div className="flex gap-2">
-                            {Object.entries(groupTotals).map(([currency, total]) => (
-                              <span key={currency} className="text-[10px] font-black text-app-accent bg-app-surface dark:bg-app-bg border border-app-border px-3 py-1 rounded-lg shadow-sm">
-                                {total.toLocaleString('en-US')} {currency}
-                              </span>
-                            ))}
+                            {Object.entries(groupTotals)
+                              .filter(([_, total]) => total > 0)
+                              .map(([currency, total]) => (
+                                <span key={currency} className="text-[10px] font-black text-app-accent bg-app-surface dark:bg-app-bg border border-app-border px-3 py-1 rounded-lg shadow-sm">
+                                  {total.toLocaleString('en-US')} {currency}
+                                </span>
+                              ))}
                           </div>
                         )}
                       </div>
@@ -1486,22 +1519,8 @@ export default function App() {
                   </div>
 
                   {/* Custom Numpad */}
-                  <div className="grid grid-cols-3 gap-3 bg-app-surface dark:bg-app-border/20 p-3 rounded-[32px] border border-app-border">
-                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'].map((key) => (
-                      <button
-                        key={key}
-                        onClick={() => handleNumpad(key)}
-                        className={`h-16 flex items-center justify-center rounded-2xl text-2xl font-bold transition-all active:scale-95 shadow-sm border border-transparent ${
-                          key === 'backspace' 
-                            ? 'text-red-500 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30' 
-                            : key === '.'
-                            ? 'text-app-text bg-app-bg dark:bg-app-border/40 hover:bg-app-surface font-mono'
-                            : 'text-app-text bg-app-bg dark:bg-app-border/40 hover:bg-app-surface font-mono'
-                        }`}
-                      >
-                        {key === 'backspace' ? <Delete className="w-6 h-6 stroke-[2.5px]" /> : key}
-                      </button>
-                    ))}
+                  <div className="w-full">
+                    <Numpad value={priceInput} setValue={setPriceInput} />
                   </div>
 
                   {/* Payment Method Selector */}
@@ -1739,11 +1758,13 @@ export default function App() {
                     </div>
                     <div className="w-full text-center text-4xl font-black text-app-accent h-10 flex items-center justify-center overflow-hidden">
                       {budgetInput || <span className="text-app-border">0</span>}
-                      <motion.div 
-                        animate={{ opacity: [1, 0] }}
-                        transition={{ repeat: Infinity, duration: 0.8 }}
-                        className="w-[2px] h-8 bg-app-accent ml-1"
-                      />
+                      {activeNumpadTarget === 'budget' && (
+                        <motion.div 
+                          animate={{ opacity: [1, 0] }}
+                          transition={{ repeat: Infinity, duration: 0.8 }}
+                          className="w-[2px] h-8 bg-app-accent ml-1"
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -1761,22 +1782,8 @@ export default function App() {
                   </div>
 
                   {/* Custom Numpad */}
-                  <div className="grid grid-cols-3 gap-3 bg-app-surface dark:bg-app-border/20 p-3 rounded-[32px] border border-app-border">
-                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'].map((key) => (
-                      <button
-                        key={key}
-                        onClick={() => handleNumpad(key, 'budget')}
-                        className={`h-16 flex items-center justify-center rounded-2xl text-2xl font-bold transition-all active:scale-95 shadow-sm border border-transparent ${
-                          key === 'backspace' 
-                            ? 'text-red-500 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30' 
-                            : key === '.'
-                            ? 'text-app-text bg-app-bg dark:bg-app-border/40 hover:bg-app-surface font-mono'
-                            : 'text-app-text bg-app-bg dark:bg-app-border/40 hover:bg-app-surface font-mono'
-                        }`}
-                      >
-                        {key === 'backspace' ? <Delete className="w-6 h-6 stroke-[2.5px]" /> : key}
-                      </button>
-                    ))}
+                  <div className="w-full">
+                    <Numpad value={budgetInput} setValue={setBudgetInput} />
                   </div>
                   
                   <div className="bg-app-accent/5 p-4 rounded-2xl border border-app-accent/10">
@@ -1853,14 +1860,15 @@ export default function App() {
                         </button>
                       ))}
                     </div>
-                    <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-4 rounded-[24px] focus-within:border-amber-500 transition-all">
-                      <input 
-                        type="number" 
-                        placeholder="أدخل المبلغ..."
-                        value={exchangeFromAmount}
-                        onChange={(e) => setExchangeFromAmount(e.target.value)}
-                        className="w-full bg-transparent text-2xl font-black text-amber-600 outline-none text-center placeholder:text-app-border"
-                      />
+                    <div 
+                      onClick={() => setActiveNumpadTarget('exchangeFrom')}
+                      className={`bg-app-bg dark:bg-app-border/10 border-2 p-4 rounded-[24px] transition-all cursor-pointer ${
+                        activeNumpadTarget === 'exchangeFrom' ? 'border-amber-500' : 'border-app-border'
+                      }`}
+                    >
+                      <div className="w-full text-2xl font-black text-amber-600 text-center">
+                        {exchangeFromAmount || <span className="text-app-border/40">0</span>}
+                      </div>
                     </div>
                   </div>
 
@@ -1873,16 +1881,25 @@ export default function App() {
 
                   {/* Exchange Rate */}
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-app-muted uppercase px-2">سعر الصرف المحدد</label>
-                    <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-4 rounded-[24px] focus-within:border-amber-500 transition-all">
-                      <input 
-                        type="number" 
-                        placeholder="أدخل فئة الصرف..."
-                        value={exchangeRate}
-                        onChange={(e) => setExchangeRate(e.target.value)}
-                        className="w-full bg-transparent text-xl font-black text-app-text outline-none text-center placeholder:text-app-border"
-                      />
+                    <label className="text-[10px] font-black text-app-muted uppercase px-2">سعر الصرف</label>
+                    <div 
+                      onClick={() => setActiveNumpadTarget('exchangeRate')}
+                      className={`bg-app-bg dark:bg-app-border/10 border-2 p-4 rounded-[24px] transition-all cursor-pointer ${
+                        activeNumpadTarget === 'exchangeRate' ? 'border-amber-500' : 'border-app-border'
+                      }`}
+                    >
+                      <div className="w-full text-xl font-black text-app-text text-center">
+                        {exchangeRate || <span className="text-app-border/40">أدخل سعر الصرف...</span>}
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Shared Numpad for Exchange */}
+                  <div className="pt-2">
+                    <Numpad 
+                      value={activeNumpadTarget === 'exchangeFrom' ? exchangeFromAmount : exchangeRate} 
+                      setValue={activeNumpadTarget === 'exchangeFrom' ? setExchangeFromAmount : setExchangeRate} 
+                    />
                   </div>
 
                   {/* To Currency Result */}
