@@ -57,6 +57,21 @@ interface Task {
 }
 
 // --- Constants ---
+const isIOS = () => {
+  if (typeof window === 'undefined' || !navigator) return false;
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  return /iPhone|iPad|iPod/i.test(ua) || /iPhone|iPad|iPod/i.test(platform) || (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+const SAR_CODE = 'ر.س';
+const SAR_SYMBOL = isIOS() ? '⃁' : 'ر.س';
+
+const getCurrencySymbol = (code?: string) => {
+  if (code === SAR_CODE) return SAR_SYMBOL;
+  return code || 'ر.ي';
+};
+
 const STATUS_LABELS = {
   pending: 'المهام المطلوبة',
   completed: 'المهام المنجزة',
@@ -78,9 +93,9 @@ const GROUP_LABELS: Record<GroupBy, string> = {
 };
 
 const CURRENCIES = [
-  { code: 'ر.ي', label: 'ريال يمني' },
-  { code: '⃁', label: 'ريال سعودي' },
-  { code: '$', label: 'دولار' }
+  { code: 'ر.ي', label: 'ريال يمني', symbol: 'ر.ي' },
+  { code: SAR_CODE, label: 'ريال سعودي', symbol: SAR_SYMBOL },
+  { code: '$', label: 'دولار', symbol: '$' }
 ];
 
 // --- Sub-components ---
@@ -133,7 +148,13 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>(() => {
     try {
       const saved = localStorage.getItem('masrofati_tasks');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      // Migration: Replace old SAR symbol with new one
+      return parsed.map((t: any) => ({
+        ...t,
+        currency: t.currency === '⃁' ? 'ر.س' : t.currency
+      }));
     } catch (e) {
       console.error('Failed to load from local storage:', e);
       return [];
@@ -198,7 +219,14 @@ export default function App() {
   const [monthlyBudgets, setMonthlyBudgets] = useState<Record<string, number>>(() => {
     try {
       const saved = localStorage.getItem('masrofati_budgets');
-      return saved ? JSON.parse(saved) : {};
+      if (!saved) return {};
+      const parsed = JSON.parse(saved);
+      // Migration: Replace old SAR symbol with new one in budget keys
+      if (parsed['⃁']) {
+        parsed['ر.س'] = parsed['⃁'];
+        delete parsed['⃁'];
+      }
+      return parsed;
     } catch (e) {
       return {};
     }
@@ -353,7 +381,7 @@ export default function App() {
       setPriceInput(task.price?.toString() || '');
       const currency = task.currency || CURRENCIES[0].code;
       setCurrencyInput(currency);
-      setPaymentMethod(task.paymentMethod || (currency === '⃁' ? 'card' : 'cash'));
+      setPaymentMethod(task.paymentMethod || (currency === 'ر.س' ? 'card' : 'cash'));
       setTagsInput(task.tags?.join(' ') || '');
       if (CATEGORIES.includes(task.category || '')) {
         setCategoryInput(task.category || CATEGORIES[0]);
@@ -368,7 +396,7 @@ export default function App() {
       setCategoryInput(CATEGORIES[0]);
       const initialCurrency = CURRENCIES[0].code;
       setCurrencyInput(initialCurrency);
-      setPaymentMethod(initialCurrency === '⃁' ? 'card' : 'cash');
+      setPaymentMethod(initialCurrency === 'ر.س' ? 'card' : 'cash');
       setCustomCategory('');
       setTagsInput('');
     }
@@ -430,7 +458,7 @@ export default function App() {
 
     const headers = ['المهمة', 'السعر', 'العملة', 'طريقة الدفع', 'الفئة', 'التاريخ'];
     const rows = completedTasks.map(t => {
-      const defaultMethod = t.currency === '⃁' ? 'card' : 'cash';
+      const defaultMethod = t.currency === 'ر.س' ? 'card' : 'cash';
       const method = t.paymentMethod || defaultMethod;
       const methodLabel = method === 'card' ? 'بطاقة' : 'كاش';
 
@@ -512,7 +540,7 @@ export default function App() {
         // Payment Method filter
         if (filterPaymentMethod !== 'all') {
           result = result.filter(t => {
-            const defaultMethod = t.currency === '⃁' ? 'card' : 'cash';
+            const defaultMethod = t.currency === 'ر.س' ? 'card' : 'cash';
             const method = t.paymentMethod || defaultMethod;
             return method === filterPaymentMethod;
           });
@@ -699,7 +727,7 @@ export default function App() {
                 .map(([currency, total]) => (
                   <div key={currency} className="text-lg md:text-xl font-bold text-app-accent flex items-center gap-1 justify-end whitespace-nowrap">
                     <span>{isPrivate ? '••••••' : total.toLocaleString('en-US')}</span>
-                    <span className="text-[10px] md:text-xs font-bold opacity-70">{currency}</span>
+                    <span className="text-[10px] md:text-xs font-bold opacity-70">{getCurrencySymbol(currency)}</span>
                   </div>
                 ))
               }
@@ -756,7 +784,7 @@ export default function App() {
                         : 'text-app-muted hover:bg-app-surface'
                     }`}
                   >
-                    {c.code}
+                    {getCurrencySymbol(c.code)}
                   </button>
                 ))}
               </div>
@@ -775,7 +803,7 @@ export default function App() {
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-2 text-app-text font-bold">
                   <Wallet className="w-5 h-5 text-app-accent" />
-                  <span>الميزانية الشهرية ({analyticsCurrency})</span>
+                  <span>الميزانية الشهرية ({getCurrencySymbol(analyticsCurrency)})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button 
@@ -797,7 +825,7 @@ export default function App() {
                       <p className="text-[10px] font-bold text-app-muted uppercase mb-1">المصروف</p>
                       <p className="text-xl font-black text-app-text">
                         {isPrivate ? '••••••' : (chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
-                        <span className="text-xs mr-1 opacity-50">{analyticsCurrency}</span>
+                        <span className="text-xs mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
                       </p>
                     </div>
                     <div className="text-left">
@@ -808,7 +836,7 @@ export default function App() {
                           : 'text-emerald-500'
                       }`}>
                         {isPrivate ? '••••••' : (monthlyBudgets[analyticsCurrency] - chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
-                        <span className="text-xs mr-1 opacity-50">{analyticsCurrency}</span>
+                        <span className="text-xs mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
                       </p>
                     </div>
                   </div>
@@ -852,7 +880,7 @@ export default function App() {
               <div className="bg-app-bg dark:bg-app-surface border border-app-border rounded-[32px] p-6 shadow-sm mb-10">
                 <h3 className="text-lg font-bold text-app-text mb-8 flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-app-accent" />
-                  تحليل المصروفات ({analyticsCurrency})
+                  تحليل المصروفات ({getCurrencySymbol(analyticsCurrency)})
                 </h3>
                 <div className="h-[300px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -897,7 +925,7 @@ export default function App() {
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: chartColors[i % chartColors.length] }} />
                         <span className="font-bold text-app-text text-sm">{item.name}</span>
                       </div>
-                      <span className="font-black text-app-accent text-sm whitespace-nowrap">{item.amount.toLocaleString('en-US')} {analyticsCurrency}</span>
+                      <span className="font-black text-app-accent text-sm whitespace-nowrap">{item.amount.toLocaleString('en-US')} {getCurrencySymbol(analyticsCurrency)}</span>
                     </div>
                   ))}
                 </div>
@@ -905,7 +933,7 @@ export default function App() {
             ) : (
               <div className="py-24 flex flex-col items-center justify-center text-app-muted gap-6 text-center">
                  <BarChart3 className="w-16 h-16 opacity-10" />
-                 <p className="font-bold text-lg">لا توجد بيانات لعملة {analyticsCurrency}</p>
+                 <p className="font-bold text-lg">لا توجد بيانات لعملة {getCurrencySymbol(analyticsCurrency)}</p>
                  <p className="text-sm opacity-70">أنجز بعض المهام وسجل أسعارها بهذه العملة لظهر الإحصائيات</p>
               </div>
             )}
@@ -1206,7 +1234,7 @@ export default function App() {
                               .filter(([_, total]) => total > 0)
                               .map(([currency, total]) => (
                                 <span key={currency} className="text-[10px] font-black text-app-accent bg-app-surface dark:bg-app-bg border border-app-border px-3 py-1 rounded-lg shadow-sm">
-                                  {total.toLocaleString('en-US')} {currency}
+                                  {total.toLocaleString('en-US')} {getCurrencySymbol(currency)}
                                 </span>
                               ))}
                           </div>
@@ -1269,7 +1297,7 @@ export default function App() {
                                                  ) : (
                                                    <Banknote className="w-2.5 h-2.5 opacity-60" />
                                                  )}
-                                                 {isPrivate ? '••••••' : task.price?.toLocaleString('en-US')} {task.currency || 'ر.ي'}
+                                                 {isPrivate ? '••••••' : task.price?.toLocaleString('en-US')} {getCurrencySymbol(task.currency)}
                                               </span>
                                               {task.category && (
                                                 <span className="text-app-muted font-bold text-[7px] bg-app-border dark:bg-app-border/20 px-1.5 py-0.5 rounded-full uppercase">
@@ -1478,7 +1506,7 @@ export default function App() {
                         key={c.code}
                         onClick={() => {
                           setCurrencyInput(c.code);
-                          setPaymentMethod(c.code === '⃁' ? 'card' : 'cash');
+                          setPaymentMethod(c.code === 'ر.س' ? 'card' : 'cash');
                         }}
                         className={`flex-1 py-2.5 rounded-xl text-[10px] font-black transition-all ${
                           currencyInput === c.code 
@@ -1486,7 +1514,7 @@ export default function App() {
                             : 'text-app-muted hover:text-app-text'
                         }`}
                       >
-                        {c.code}
+                        {c.symbol}
                       </button>
                     ))}
                   </div>
@@ -1494,7 +1522,7 @@ export default function App() {
                   {/* Price Display */}
                   <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-5 rounded-[28px] relative focus-within:border-app-accent transition-all group">
                     <div className="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-black text-app-muted">
-                      {currencyInput}
+                      {getCurrencySymbol(currencyInput)}
                     </div>
                     <div className="w-full text-center text-4xl font-black text-app-accent h-10 flex items-center justify-center overflow-hidden">
                       {priceInput || <span className="text-app-border">0</span>}
@@ -1755,7 +1783,7 @@ export default function App() {
                   {/* Price Display */}
                   <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-5 rounded-[28px] relative focus-within:border-app-accent transition-all group">
                     <div className="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-black text-app-muted">
-                      {analyticsCurrency}
+                      {getCurrencySymbol(analyticsCurrency)}
                     </div>
                     <div className="w-full text-center text-4xl font-black text-app-accent h-10 flex items-center justify-center overflow-hidden">
                       {budgetInput || <span className="text-app-border">0</span>}
@@ -1789,7 +1817,7 @@ export default function App() {
                   
                   <div className="bg-app-accent/5 p-4 rounded-2xl border border-app-accent/10">
                     <p className="text-[10px] text-app-muted font-bold leading-relaxed text-center">
-                      سيتم استخدام هذه القيمة لمراقبة مصروفاتك بالـ {analyticsCurrency} خلال التقارير.
+                      سيتم استخدام هذه القيمة لمراقبة مصروفاتك بالـ {getCurrencySymbol(analyticsCurrency)} خلال التقارير.
                     </p>
                   </div>
 
@@ -1857,7 +1885,7 @@ export default function App() {
                               : 'text-app-muted hover:bg-app-surface dark:hover:bg-app-border'
                           }`}
                         >
-                          {c.code}
+                          {getCurrencySymbol(c.code)}
                         </button>
                       ))}
                     </div>
@@ -1917,7 +1945,7 @@ export default function App() {
                               : 'text-app-muted hover:bg-app-surface dark:hover:bg-app-border'
                           }`}
                         >
-                          {c.code}
+                          {getCurrencySymbol(c.code)}
                         </button>
                       ))}
                     </div>
@@ -1925,14 +1953,14 @@ export default function App() {
                       <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mb-1 uppercase">المبلغ الإجمالي الناتج</p>
                       <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
                         {exchangeResultCalculated.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                        <span className="text-xs mr-2 opacity-60">{exchangeToCurrency}</span>
+                        <span className="text-xs mr-2 opacity-60">{getCurrencySymbol(exchangeToCurrency)}</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/10">
                     <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold leading-relaxed text-center">
-                      سيتم خصم {parseFloat(exchangeFromAmount) || 0} {exchangeFromCurrency} من ميزانيتك، وإضافة {exchangeResultCalculated.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {exchangeToCurrency} بدلاً عنها.
+                      سيتم خصم {parseFloat(exchangeFromAmount) || 0} {getCurrencySymbol(exchangeFromCurrency)} من ميزانيتك، وإضافة {exchangeResultCalculated.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {getCurrencySymbol(exchangeToCurrency)} بدلاً عنها.
                     </p>
                   </div>
 
