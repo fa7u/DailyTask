@@ -279,10 +279,9 @@ export default function App() {
 
     if (fromAmt <= 0 || rate <= 0) return;
 
-    // Update budgets: Decrease from, Increase to
+    // Update budgets: Increase the target currency budget to reflect the inflow
     setMonthlyBudgets(prev => ({
       ...prev,
-      [exchangeFromCurrency]: (prev[exchangeFromCurrency] || 0) - fromAmt,
       [exchangeToCurrency]: (prev[exchangeToCurrency] || 0) + toAmt
     }));
 
@@ -579,10 +578,12 @@ export default function App() {
   // Calculate total expenses from completed tasks (based on filtered tasks)
   const totalsByCurrency = useMemo(() => {
     const totals: Record<string, number> = {};
-    tasks.filter(t => t.status === 'completed').forEach(t => {
-      const cur = t.currency || 'ر.ي';
-      totals[cur] = (totals[cur] || 0) + (t.price || 0);
-    });
+    tasks
+      .filter(t => t.status === 'completed')
+      .forEach(t => {
+        const cur = t.currency || 'ر.ي';
+        totals[cur] = (totals[cur] || 0) + (t.price || 0);
+      });
     return totals;
   }, [tasks]);
 
