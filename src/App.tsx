@@ -93,6 +93,20 @@ export default function App() {
     const saved = localStorage.getItem('masrofati_dark_mode');
     return saved === 'true';
   });
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   const [isInitialized, setIsInitialized] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<TaskStatus>('pending');
@@ -530,7 +544,17 @@ export default function App() {
               <h1 className="text-2xl font-black text-app-text tracking-tight">Sarfiah</h1>
               <div className="flex items-center gap-2">
                 <p className="text-xs text-app-muted font-medium">تتبع مشترياتك ومصاريفك اليومية</p>
-                {isSyncing && (
+                {!isOnline && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded-md border border-amber-200/50 dark:border-amber-800/50"
+                  >
+                    <Clock className="w-2.5 h-2.5" />
+                    وضع عدم الاتصال
+                  </motion.div>
+                )}
+                {isSyncing && isOnline && (
                   <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
