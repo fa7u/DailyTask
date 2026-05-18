@@ -14,23 +14,19 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
         manifest: {
-          name: 'مصروفاتي - Masrofati',
-          short_name: 'مصروفاتي',
-          description: 'تطبيق إدارة المصاريف الشخصية والمهام المنجزة',
-          theme_color: '#10b981',
+          name: 'Sarfiah - صرفية',
+          short_name: 'Sarfiah',
+          description: 'تطبيق احترافي لإدارة المصاريف والمهام',
+          theme_color: '#2563eb',
           background_color: '#ffffff',
           display: 'standalone',
           orientation: 'portrait',
           icons: [
             {
-              src: 'pwa-192x192.png',
-              sizes: '192x192',
-              type: 'image/png'
-            },
-            {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png'
+              src: 'icon.svg',
+              sizes: 'any',
+              type: 'image/svg+xml',
+              purpose: 'any maskable'
             }
           ]
         },
