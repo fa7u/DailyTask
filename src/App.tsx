@@ -1142,7 +1142,7 @@ export default function App() {
         {/* Section Title */}
         {activeTab !== 'analytics' && (
           <>
-            <div className="flex justify-between items-center mb-8 px-2">
+            <div className="flex justify-between items-center gap-4 mb-8 px-2">
               <h2 className="text-xl font-bold text-app-text flex items-center gap-3">
                 {STATUS_LABELS[activeTab]}
                 <span className="bg-app-border dark:bg-app-border/20 text-app-muted text-[11px] px-3 py-1 rounded-full font-bold">
