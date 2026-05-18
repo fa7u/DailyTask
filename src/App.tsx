@@ -23,6 +23,8 @@ import {
   Download,
   CreditCard,
   Banknote,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   BarChart,
@@ -93,6 +95,10 @@ export default function App() {
     const saved = localStorage.getItem('masrofati_dark_mode');
     return saved === 'true';
   });
+  const [isPrivate, setIsPrivate] = useState(() => {
+    const saved = localStorage.getItem('masrofati_private_mode');
+    return saved === 'true';
+  });
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
@@ -111,6 +117,7 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<TaskStatus>('pending');
   const [newTaskText, setNewTaskText] = useState('');
+  const [modalTaskText, setModalTaskText] = useState('');
   const [showPriceModal, setShowPriceModal] = useState<{ isOpen: boolean; taskId: string | null }>({
     isOpen: false,
     taskId: null
@@ -161,6 +168,10 @@ export default function App() {
     }
     localStorage.setItem('masrofati_dark_mode', isDarkMode.toString());
   }, [isDarkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('masrofati_private_mode', isPrivate.toString());
+  }, [isPrivate]);
 
   useEffect(() => {
     // Save to local storage
@@ -249,6 +260,7 @@ export default function App() {
   const openCompleteModal = (id: string) => {
     const task = tasks.find(t => t.id === id);
     if (task && task.status === 'completed') {
+      setModalTaskText(task.text);
       setPriceInput(task.price?.toString() || '');
       const currency = task.currency || CURRENCIES[0].code;
       setCurrencyInput(currency);
@@ -262,6 +274,7 @@ export default function App() {
         setCustomCategory(task.category || '');
       }
     } else {
+      setModalTaskText(task?.text || '');
       setPriceInput('');
       setCategoryInput(CATEGORIES[0]);
       const initialCurrency = CURRENCIES[0].code;
@@ -288,6 +301,7 @@ export default function App() {
       t.id === showPriceModal.taskId 
         ? { 
             ...t, 
+            text: modalTaskText.trim() || t.text,
             status: 'completed', 
             price,
             currency: currencyInput,
@@ -300,6 +314,7 @@ export default function App() {
     ));
     
     setShowPriceModal({ isOpen: false, taskId: null });
+    setModalTaskText('');
     setPriceInput('');
     setCategoryInput(CATEGORIES[0]);
     setCurrencyInput(CURRENCIES[0].code);
@@ -307,26 +322,31 @@ export default function App() {
     setTagsInput('');
   };
 
-  const handleNumpad = (val: string) => {
+  const handleNumpad = (val: string, type: 'price' | 'budget' = 'price') => {
+    const setInput = type === 'price' ? setPriceInput : setBudgetInput;
+    const currentInput = type === 'price' ? priceInput : budgetInput;
+
     if (val === 'backspace') {
-      setPriceInput(prev => prev.slice(0, -1));
+      setInput(prev => prev.slice(0, -1));
     } else if (val === '.') {
-      if (!priceInput.includes('.')) {
-        setPriceInput(prev => (prev === '' ? '0.' : prev + '.'));
+      if (!currentInput.includes('.')) {
+        setInput(prev => (prev === '' ? '0.' : prev + '.'));
       }
     } else {
-      if (priceInput.length >= 12) return;
-      setPriceInput(prev => (prev === '0' ? val : prev + val));
+      if (currentInput.length >= 12) return;
+      setInput(prev => (prev === '0' ? val : prev + val));
     }
   };
 
-  const handleQuickAdd = (amount: number) => {
-    const current = parseFloat(priceInput) || 0;
-    setPriceInput((current + amount).toString());
+  const handleQuickAdd = (amount: number, type: 'price' | 'budget' = 'price') => {
+    const setInput = type === 'price' ? setPriceInput : setBudgetInput;
+    const currentInput = type === 'price' ? priceInput : budgetInput;
+    const current = parseFloat(currentInput) || 0;
+    setInput((current + amount).toString());
   };
 
   const exportToCSV = () => {
-    const completedTasks = tasks.filter(t => t.status === 'completed');
+    const completedTasks = filteredTasks;
     if (completedTasks.length === 0) return;
 
     const totalsByCurrency: Record<string, number> = {};
@@ -393,59 +413,57 @@ export default function App() {
     setShowBudgetModal(false);
   };
 
-  // 1. Base filtering (Global filters)
-  const baseFilteredTasks = useMemo(() => {
-    let result = [...tasks];
-
-    // Search filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(t => t.text.toLowerCase().includes(q) || t.category?.toLowerCase().includes(q));
-    }
-
-    // Category filter
-    if (filterCategory !== 'الكل') {
-      result = result.filter(t => t.category === filterCategory);
-    }
-
-    // Tag filter
-    if (filterTag) {
-      result = result.filter(t => t.tags?.includes(filterTag));
-    }
-
-    // Payment Method filter
-    if (filterPaymentMethod !== 'all') {
-      result = result.filter(t => {
-        const defaultMethod = t.currency === '⃁' ? 'card' : 'cash';
-        const method = t.paymentMethod || defaultMethod;
-        return method === filterPaymentMethod;
-      });
-    }
-
-    // Date Range filter
-    if (dateFrom) {
-      result = result.filter(t => new Date(t.createdAt).getTime() >= new Date(dateFrom).getTime());
-    }
-    if (dateTo) {
-      const end = new Date(dateTo);
-      end.setHours(23, 59, 59, 999);
-      result = result.filter(t => new Date(t.createdAt).getTime() <= end.getTime());
-    }
-
-    // Price range filter
-    if (minPrice) {
-      result = result.filter(t => (t.price || 0) >= parseFloat(minPrice));
-    }
-    if (maxPrice) {
-      result = result.filter(t => (t.price || 0) <= parseFloat(maxPrice));
-    }
-
-    return result;
-  }, [tasks, searchQuery, filterCategory, filterTag, filterPaymentMethod, minPrice, maxPrice, dateFrom, dateTo]);
-
-  // 2. Filtered tasks for the list (adds status filter + sorting)
   const filteredTasks = useMemo(() => {
-    let result = baseFilteredTasks.filter(t => t.status === activeTab);
+    let result = tasks.filter(t => t.status === activeTab);
+
+    // Apply filters ONLY if the tab is 'completed'
+    // Search is an exception, we might want it on postponed too
+    if (activeTab === 'completed' || activeTab === 'postponed') {
+      // Search filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        result = result.filter(t => t.text.toLowerCase().includes(q) || t.category?.toLowerCase().includes(q));
+      }
+
+      if (activeTab === 'completed') {
+        // Category filter
+        if (filterCategory !== 'الكل') {
+          result = result.filter(t => t.category === filterCategory);
+        }
+
+        // Tag filter
+        if (filterTag) {
+          result = result.filter(t => t.tags?.includes(filterTag));
+        }
+
+        // Payment Method filter
+        if (filterPaymentMethod !== 'all') {
+          result = result.filter(t => {
+            const defaultMethod = t.currency === '⃁' ? 'card' : 'cash';
+            const method = t.paymentMethod || defaultMethod;
+            return method === filterPaymentMethod;
+          });
+        }
+
+        // Date Range filter
+        if (dateFrom) {
+          result = result.filter(t => new Date(t.createdAt).getTime() >= new Date(dateFrom).getTime());
+        }
+        if (dateTo) {
+          const end = new Date(dateTo);
+          end.setHours(23, 59, 59, 999);
+          result = result.filter(t => new Date(t.createdAt).getTime() <= end.getTime());
+        }
+
+        // Price range filter
+        if (minPrice) {
+          result = result.filter(t => (t.price || 0) >= parseFloat(minPrice));
+        }
+        if (maxPrice) {
+          result = result.filter(t => (t.price || 0) <= parseFloat(maxPrice));
+        }
+      }
+    }
 
     // Sorting
     result.sort((a, b) => {
@@ -457,7 +475,7 @@ export default function App() {
     });
 
     return result;
-  }, [baseFilteredTasks, activeTab, sortBy]);
+  }, [tasks, activeTab, searchQuery, filterCategory, filterTag, filterPaymentMethod, minPrice, maxPrice, dateFrom, dateTo, sortBy]);
   
   // Group tasks by date
   const groupedTasks = useMemo(() => {
@@ -487,12 +505,12 @@ export default function App() {
   // Calculate total expenses from completed tasks (based on filtered tasks)
   const totalsByCurrency = useMemo(() => {
     const totals: Record<string, number> = {};
-    baseFilteredTasks.filter(t => t.status === 'completed').forEach(t => {
+    tasks.filter(t => t.status === 'completed').forEach(t => {
       const cur = t.currency || 'ر.ي';
       totals[cur] = (totals[cur] || 0) + (t.price || 0);
     });
     return totals;
-  }, [baseFilteredTasks]);
+  }, [tasks]);
 
   const chartColors = useMemo(() => {
     return isDarkMode 
@@ -502,16 +520,17 @@ export default function App() {
 
   const chartData = useMemo(() => {
     const groups: Record<string, number> = {};
-    baseFilteredTasks
+    tasks
       .filter(t => t.status === 'completed' && (t.currency || 'ر.ي') === analyticsCurrency)
       .forEach(t => {
         const cat = t.category || 'أخرى';
         groups[cat] = (groups[cat] || 0) + (t.price || 0);
       });
     return Object.entries(groups).map(([name, amount]) => ({ name, amount }));
-  }, [baseFilteredTasks, analyticsCurrency]);
+  }, [tasks, analyticsCurrency]);
   
   const activeFiltersCount = useMemo(() => {
+    if (activeTab !== 'completed') return 0;
     let count = 0;
     if (searchQuery.trim()) count++;
     if (filterCategory !== 'الكل') count++;
@@ -522,7 +541,7 @@ export default function App() {
     if (dateFrom) count++;
     if (dateTo) count++;
     return count;
-  }, [searchQuery, filterCategory, filterTag, filterPaymentMethod, minPrice, maxPrice, dateFrom, dateTo]);
+  }, [activeTab, searchQuery, filterCategory, filterTag, filterPaymentMethod, minPrice, maxPrice, dateFrom, dateTo]);
 
   const progressPercentage = useMemo(() => {
     const budget = monthlyBudgets[analyticsCurrency];
@@ -570,6 +589,18 @@ export default function App() {
           
           <div className="flex items-center gap-4">
             <button
+              onClick={() => setIsPrivate(!isPrivate)}
+              className={`p-2.5 rounded-xl border transition-all shadow-sm ${
+                isPrivate 
+                  ? 'bg-app-accent text-white border-app-accent' 
+                  : 'bg-app-bg border-app-border text-app-muted hover:text-app-accent'
+              }`}
+              aria-label={isPrivate ? "إظهار المبالغ" : "إخفاء المبالغ"}
+            >
+              {isPrivate ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+
+            <button
               onClick={() => setIsDarkMode(!isDarkMode)}
               className="p-2.5 rounded-xl bg-app-bg border border-app-border text-app-muted hover:text-app-accent transition-colors shadow-sm"
               aria-label="تغيير المظهر"
@@ -584,13 +615,13 @@ export default function App() {
               {(Object.entries(totalsByCurrency) as [string, number][]).length > 0 ? (
                 (Object.entries(totalsByCurrency) as [string, number][]).map(([currency, total]) => (
                   <div key={currency} className="text-lg md:text-xl font-bold text-app-accent flex items-center gap-1 justify-end whitespace-nowrap">
-                    <span>{total.toLocaleString('en-US')}</span>
+                    <span>{isPrivate ? '••••••' : total.toLocaleString('en-US')}</span>
                     <span className="text-[10px] md:text-xs font-bold opacity-70">{currency}</span>
                   </div>
                 ))
               ) : (
                 <div className="text-lg md:text-xl font-bold text-app-accent flex items-center gap-1 justify-end whitespace-nowrap">
-                  <span>0</span>
+                  <span>{isPrivate ? '••••••' : '0'}</span>
                   <span className="text-[10px] md:text-xs font-bold opacity-70">ر.ي</span>
                 </div>
               )}
@@ -675,7 +706,7 @@ export default function App() {
                     <div>
                       <p className="text-[10px] font-bold text-app-muted uppercase mb-1">المصروف</p>
                       <p className="text-xl font-black text-app-text">
-                        {(chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
+                        {isPrivate ? '••••••' : (chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
                         <span className="text-xs mr-1 opacity-50">{analyticsCurrency}</span>
                       </p>
                     </div>
@@ -686,7 +717,7 @@ export default function App() {
                           ? 'text-red-500 font-black' 
                           : 'text-emerald-500'
                       }`}>
-                        {(monthlyBudgets[analyticsCurrency] - chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
+                        {isPrivate ? '••••••' : (monthlyBudgets[analyticsCurrency] - chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
                         <span className="text-xs mr-1 opacity-50">{analyticsCurrency}</span>
                       </p>
                     </div>
@@ -1146,7 +1177,7 @@ export default function App() {
                                                  ) : (
                                                    <Banknote className="w-2.5 h-2.5 opacity-60" />
                                                  )}
-                                                 {task.price?.toLocaleString('en-US')} {task.currency || 'ر.ي'}
+                                                 {isPrivate ? '••••••' : task.price?.toLocaleString('en-US')} {task.currency || 'ر.ي'}
                                               </span>
                                               {task.category && (
                                                 <span className="text-app-muted font-bold text-[7px] bg-app-border dark:bg-app-border/20 px-1.5 py-0.5 rounded-full uppercase">
@@ -1331,6 +1362,23 @@ export default function App() {
                 </div>
                 
                 <div className="w-full space-y-5">
+                  {/* Task Text Editing */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-[9px] font-black text-app-muted uppercase px-2">
+                       <ShoppingBag className="w-3 h-3" />
+                       وصف المهمة
+                    </div>
+                    <div className="bg-app-bg dark:bg-app-border/10 border border-app-border p-3 rounded-2xl focus-within:border-app-accent transition-all">
+                      <input 
+                        type="text"
+                        placeholder="أدخل وصف المهمة..."
+                        className="w-full bg-transparent outline-none text-xs font-bold text-app-text placeholder:text-app-muted/30"
+                        value={modalTaskText}
+                        onChange={(e) => setModalTaskText(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
                   {/* Currency Selector */}
                   <div className="flex bg-app-surface dark:bg-app-border/10 p-1 rounded-2xl gap-1">
                     {CURRENCIES.map((c) => (
@@ -1380,18 +1428,20 @@ export default function App() {
                   </div>
 
                   {/* Custom Numpad */}
-                  <div className="grid grid-cols-3 gap-2 bg-app-surface dark:bg-app-border border border-app-border">
+                  <div className="grid grid-cols-3 gap-3 bg-app-surface dark:bg-app-border/20 p-3 rounded-[32px] border border-app-border">
                     {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'].map((key) => (
                       <button
                         key={key}
                         onClick={() => handleNumpad(key)}
-                        className={`h-14 flex items-center justify-center rounded-2xl text-xl font-black transition-all active:scale-90 shadow-sm ${
+                        className={`h-16 flex items-center justify-center rounded-2xl text-2xl font-bold transition-all active:scale-95 shadow-sm border border-transparent ${
                           key === 'backspace' 
-                            ? 'text-red-400 bg-app-bg dark:bg-red-950/10 hover:bg-red-50 dark:hover:bg-red-900/20' 
-                            : 'text-app-text bg-app-bg dark:bg-app-border/20 hover:bg-app-surface'
+                            ? 'text-red-500 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30' 
+                            : key === '.'
+                            ? 'text-app-text bg-app-bg dark:bg-app-border/40 hover:bg-app-surface font-mono'
+                            : 'text-app-text bg-app-bg dark:bg-app-border/40 hover:bg-app-surface font-mono'
                         }`}
                       >
-                        {key === 'backspace' ? <Delete className="w-6 h-6" /> : key}
+                        {key === 'backspace' ? <Delete className="w-6 h-6 stroke-[2.5px]" /> : key}
                       </button>
                     ))}
                   </div>
@@ -1610,7 +1660,7 @@ export default function App() {
               initial={{ scale: 0.9, opacity: 0, y: 40 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 40 }}
-              className="bg-app-bg dark:bg-app-surface w-full max-w-sm rounded-[40px] p-6 shadow-2xl relative z-10 border border-app-border"
+              className="bg-app-bg dark:bg-app-surface w-full max-w-sm rounded-[40px] p-6 shadow-2xl relative z-10 border border-app-border max-h-[90vh] overflow-y-auto scrollbar-hide"
             >
               <div className="flex flex-col items-center">
                 <div className="flex items-center justify-between w-full mb-6">
@@ -1624,20 +1674,55 @@ export default function App() {
                 </div>
 
                 <div className="w-full space-y-6">
-                  <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-6 rounded-[28px] text-center focus-within:border-app-accent transition-all relative">
-                    <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-app-muted text-sm">{analyticsCurrency}</span>
-                    <input 
-                      type="number" 
-                      placeholder="0.00"
-                      value={budgetInput}
-                      onChange={(e) => setBudgetInput(e.target.value)}
-                      className="w-full bg-transparent text-4xl font-black text-app-accent outline-none text-center placeholder:text-app-border"
-                      autoFocus
-                    />
+                  {/* Price Display */}
+                  <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-5 rounded-[28px] relative focus-within:border-app-accent transition-all group">
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-black text-app-muted">
+                      {analyticsCurrency}
+                    </div>
+                    <div className="w-full text-center text-4xl font-black text-app-accent h-10 flex items-center justify-center overflow-hidden">
+                      {budgetInput || <span className="text-app-border">0</span>}
+                      <motion.div 
+                        animate={{ opacity: [1, 0] }}
+                        transition={{ repeat: Infinity, duration: 0.8 }}
+                        className="w-[2px] h-8 bg-app-accent ml-1"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Increment Buttons */}
+                  <div className="grid grid-cols-4 gap-2">
+                    {[5, 10, 100, 500, 1000, 5000, 10000].map((amount) => (
+                      <button
+                        key={amount}
+                        onClick={() => handleQuickAdd(amount, 'budget')}
+                        className="py-2.5 bg-app-surface dark:bg-app-border/10 hover:bg-app-accent hover:text-white text-app-accent rounded-xl text-[10px] font-black transition-all active:scale-95 border border-app-border"
+                      >
+                        +{amount.toLocaleString('en-US')}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom Numpad */}
+                  <div className="grid grid-cols-3 gap-3 bg-app-surface dark:bg-app-border/20 p-3 rounded-[32px] border border-app-border">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'].map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => handleNumpad(key, 'budget')}
+                        className={`h-16 flex items-center justify-center rounded-2xl text-2xl font-bold transition-all active:scale-95 shadow-sm border border-transparent ${
+                          key === 'backspace' 
+                            ? 'text-red-500 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30' 
+                            : key === '.'
+                            ? 'text-app-text bg-app-bg dark:bg-app-border/40 hover:bg-app-surface font-mono'
+                            : 'text-app-text bg-app-bg dark:bg-app-border/40 hover:bg-app-surface font-mono'
+                        }`}
+                      >
+                        {key === 'backspace' ? <Delete className="w-6 h-6 stroke-[2.5px]" /> : key}
+                      </button>
+                    ))}
                   </div>
                   
                   <div className="bg-app-accent/5 p-4 rounded-2xl border border-app-accent/10">
-                    <p className="text-[10px] text-app-muted font-bold leading-relaxed">
+                    <p className="text-[10px] text-app-muted font-bold leading-relaxed text-center">
                       سيتم استخدام هذه القيمة لمراقبة مصروفاتك بالـ {analyticsCurrency} خلال التقارير.
                     </p>
                   </div>
