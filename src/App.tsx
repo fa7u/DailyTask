@@ -23,6 +23,8 @@ import {
   Download,
   CreditCard,
   Banknote,
+  RefreshCcw,
+  ArrowRightLeft,
   Eye,
   EyeOff,
 } from 'lucide-react';
@@ -156,7 +158,12 @@ export default function App() {
     }
   });
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showExchangeModal, setShowExchangeModal] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
+  const [exchangeFromAmount, setExchangeFromAmount] = useState('');
+  const [exchangeFromCurrency, setExchangeFromCurrency] = useState(CURRENCIES[0].code);
+  const [exchangeToCurrency, setExchangeToCurrency] = useState(CURRENCIES[1].code);
+  const [exchangeRate, setExchangeRate] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
 
   // --- Handlers ---
@@ -216,6 +223,41 @@ export default function App() {
     };
     setTasks([newTask, ...tasks]);
     setNewTaskText('');
+  };
+
+  const handleExchange = () => {
+    const fromAmt = parseFloat(exchangeFromAmount) || 0;
+    const rate = parseFloat(exchangeRate) || 0;
+    const toAmt = Math.round((exchangeFromCurrency === 'ر.ي' ? fromAmt / rate : fromAmt * rate) * 100) / 100;
+
+    if (fromAmt <= 0 || rate <= 0) return;
+
+    // Update budgets: Decrease from, Increase to
+    setMonthlyBudgets(prev => ({
+      ...prev,
+      [exchangeFromCurrency]: (prev[exchangeFromCurrency] || 0) - fromAmt,
+      [exchangeToCurrency]: (prev[exchangeToCurrency] || 0) + toAmt
+    }));
+
+    // Record the exchange
+    const exchangeTask: Task = {
+      id: `${Date.now()}-exch`,
+      text: `مصارفة: ${fromAmt.toLocaleString('en-US')} ${exchangeFromCurrency} -> ${toAmt.toLocaleString('en-US')} ${exchangeToCurrency}`,
+      status: 'completed',
+      price: 0,
+      currency: exchangeFromCurrency,
+      category: 'مصارفة',
+      paymentMethod: 'cash',
+      date: new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: '2-digit', numberingSystem: 'latn' }),
+      createdAt: new Date().toISOString()
+    };
+
+    setTasks([exchangeTask, ...tasks]);
+
+    // Reset and close
+    setShowExchangeModal(false);
+    setExchangeFromAmount('');
+    setExchangeRate('');
   };
 
   const deleteTask = (id: string) => {
@@ -550,6 +592,13 @@ export default function App() {
     return (spent / budget) * 100;
   }, [chartData, monthlyBudgets, analyticsCurrency]);
 
+  const exchangeResultCalculated = useMemo(() => {
+    const amt = parseFloat(exchangeFromAmount) || 0;
+    const rate = parseFloat(exchangeRate) || 0;
+    if (rate === 0) return 0;
+    return exchangeFromCurrency === 'ر.ي' ? amt / rate : amt * rate;
+  }, [exchangeFromAmount, exchangeRate, exchangeFromCurrency]);
+
   return (
     <div dir="rtl" className="min-h-screen bg-app-bg font-sans pb-28 overflow-x-hidden text-app-text">
       {/* Header */}
@@ -689,15 +738,24 @@ export default function App() {
                   <Wallet className="w-5 h-5 text-app-accent" />
                   <span>الميزانية الشهرية ({analyticsCurrency})</span>
                 </div>
-                <button 
-                  onClick={() => {
-                    setBudgetInput(monthlyBudgets[analyticsCurrency]?.toString() || '');
-                    setShowBudgetModal(true);
-                  }}
-                  className="text-[10px] font-black text-app-accent bg-app-accent/10 py-1.5 px-3 rounded-full hover:bg-app-accent hover:text-white transition-all"
-                >
-                  {monthlyBudgets[analyticsCurrency] ? 'تعديل الميزانية' : 'تحديد ميزانية'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setShowExchangeModal(true)}
+                    className="text-[10px] font-black text-amber-600 bg-amber-500/10 py-1.5 px-3 rounded-full hover:bg-amber-500 hover:text-white transition-all flex items-center gap-1.5"
+                  >
+                    <RefreshCcw className="w-3 h-3" />
+                    مصارفة
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setBudgetInput(monthlyBudgets[analyticsCurrency]?.toString() || '');
+                      setShowBudgetModal(true);
+                    }}
+                    className="text-[10px] font-black text-app-accent bg-app-accent/10 py-1.5 px-3 rounded-full hover:bg-app-accent hover:text-white transition-all"
+                  >
+                    {monthlyBudgets[analyticsCurrency] ? 'تعديل الميزانية' : 'تحديد ميزانية'}
+                  </button>
+                </div>
               </div>
 
               {monthlyBudgets[analyticsCurrency] ? (
@@ -1741,6 +1799,132 @@ export default function App() {
                       تأكيد
                     </button>
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Currency Exchange Modal */}
+      <AnimatePresence>
+        {showExchangeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-amber-500/10 dark:bg-black/40 backdrop-blur-[2px]"
+              onClick={() => setShowExchangeModal(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 40 }}
+              className="bg-app-bg dark:bg-app-surface w-full max-w-sm rounded-[40px] p-6 shadow-2xl relative z-10 border border-app-border max-h-[95vh] overflow-y-auto scrollbar-hide"
+            >
+              <div className="flex flex-col items-center">
+                <div className="flex items-center justify-between w-full mb-6">
+                  <div className="w-10 h-10 bg-amber-500/10 rounded-full flex items-center justify-center">
+                    <RefreshCcw className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <h3 className="text-xl font-black text-app-text">إجراء عملية مصارفة</h3>
+                  <button onClick={() => setShowExchangeModal(false)} className="p-2 hover:bg-app-surface rounded-full text-app-muted">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="w-full space-y-6">
+                  {/* From Amount */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-app-muted uppercase px-2">المبلغ المراد سحبه</label>
+                    <div className="flex bg-app-surface dark:bg-app-border/10 p-1 rounded-2xl gap-1 mb-2">
+                      {CURRENCIES.map((c) => (
+                        <button
+                          key={c.code}
+                          onClick={() => setExchangeFromCurrency(c.code)}
+                          className={`flex-1 py-2 rounded-xl text-[10px] font-black transition-all ${
+                            exchangeFromCurrency === c.code 
+                              ? 'bg-amber-500 text-white shadow-md' 
+                              : 'text-app-muted hover:bg-app-surface dark:hover:bg-app-border'
+                          }`}
+                        >
+                          {c.code}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-4 rounded-[24px] focus-within:border-amber-500 transition-all">
+                      <input 
+                        type="number" 
+                        placeholder="أدخل المبلغ..."
+                        value={exchangeFromAmount}
+                        onChange={(e) => setExchangeFromAmount(e.target.value)}
+                        className="w-full bg-transparent text-2xl font-black text-amber-600 outline-none text-center placeholder:text-app-border"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Icon */}
+                  <div className="flex justify-center -my-3">
+                    <div className="w-8 h-8 bg-app-bg border border-app-border rounded-full flex items-center justify-center shadow-sm">
+                       <ArrowRightLeft className="w-4 h-4 text-app-muted" />
+                    </div>
+                  </div>
+
+                  {/* Exchange Rate */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-app-muted uppercase px-2">سعر الصرف المحدد</label>
+                    <div className="bg-app-bg dark:bg-app-border/10 border-2 border-app-border p-4 rounded-[24px] focus-within:border-amber-500 transition-all">
+                      <input 
+                        type="number" 
+                        placeholder="أدخل فئة الصرف..."
+                        value={exchangeRate}
+                        onChange={(e) => setExchangeRate(e.target.value)}
+                        className="w-full bg-transparent text-xl font-black text-app-text outline-none text-center placeholder:text-app-border"
+                      />
+                    </div>
+                  </div>
+
+                  {/* To Currency Result */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-app-muted uppercase px-2">العملة المقابلة والمبلغ الناتج</label>
+                    <div className="flex bg-app-surface dark:bg-app-border/10 p-1 rounded-2xl gap-1 mb-2">
+                      {CURRENCIES.map((c) => (
+                        <button
+                          key={c.code}
+                          onClick={() => setExchangeToCurrency(c.code)}
+                          className={`flex-1 py-2 rounded-xl text-[10px] font-black transition-all ${
+                            exchangeToCurrency === c.code 
+                              ? 'bg-emerald-500 text-white shadow-md' 
+                              : 'text-app-muted hover:bg-app-surface dark:hover:bg-app-border'
+                          }`}
+                        >
+                          {c.code}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="bg-emerald-50 dark:bg-emerald-950/10 border-2 border-emerald-500/30 p-5 rounded-[24px] text-center">
+                      <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mb-1 uppercase">المبلغ الإجمالي الناتج</p>
+                      <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
+                        {exchangeResultCalculated.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        <span className="text-xs mr-2 opacity-60">{exchangeToCurrency}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/10">
+                    <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold leading-relaxed text-center">
+                      سيتم خصم {parseFloat(exchangeFromAmount) || 0} {exchangeFromCurrency} من ميزانيتك، وإضافة {exchangeResultCalculated.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {exchangeToCurrency} بدلاً عنها.
+                    </p>
+                  </div>
+
+                  <button 
+                    onClick={handleExchange}
+                    disabled={!exchangeFromAmount || !exchangeRate || exchangeFromCurrency === exchangeToCurrency}
+                    className="w-full bg-amber-500 hover:opacity-90 disabled:opacity-30 text-white font-black py-5 rounded-[24px] transition-all shadow-xl shadow-amber-500/20 active:scale-95 text-lg"
+                  >
+                    تأكيد المصارفة
+                  </button>
                 </div>
               </div>
             </motion.div>
