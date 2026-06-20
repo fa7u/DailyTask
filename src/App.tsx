@@ -27,6 +27,7 @@ import {
   ArrowRightLeft,
   Eye,
   EyeOff,
+  Laptop,
 } from 'lucide-react';
 import {
   BarChart,
@@ -55,6 +56,13 @@ interface Task {
   createdAt: string;
   tags?: string[];
 }
+
+interface BudgetDataItem {
+  activeAmount: number;
+  lastResetDate: string;
+  cumulativeTotal: number;
+}
+type BudgetsData = Record<string, BudgetDataItem>;
 
 // --- Constants ---
 const isIOS = () => {
@@ -160,9 +168,31 @@ export default function App() {
       return [];
     }
   });
+  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
+    const savedMode = localStorage.getItem('masrofati_theme_mode');
+    if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') {
+      return savedMode;
+    }
+    const savedDark = localStorage.getItem('masrofati_dark_mode');
+    if (savedDark !== null) {
+      return savedDark === 'true' ? 'dark' : 'light';
+    }
+    return 'light';
+  });
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem('masrofati_dark_mode');
-    return saved === 'true';
+    const savedMode = localStorage.getItem('masrofati_theme_mode');
+    if (savedMode === 'dark') return true;
+    if (savedMode === 'light') return false;
+    if (savedMode === 'system') {
+      if (typeof window !== 'undefined' && window.matchMedia) {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      return false;
+    }
+    const savedDark = localStorage.getItem('masrofati_dark_mode');
+    return savedDark === 'true';
   });
   const [isPrivate, setIsPrivate] = useState(() => {
     const saved = localStorage.getItem('masrofati_private_mode');
@@ -216,17 +246,37 @@ export default function App() {
   const [showFilters, setShowFilters] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [monthlyBudgets, setMonthlyBudgets] = useState<Record<string, number>>(() => {
+  const [budgetsData, setBudgetsData] = useState<BudgetsData>(() => {
     try {
-      const saved = localStorage.getItem('masrofati_budgets');
-      if (!saved) return {};
-      const parsed = JSON.parse(saved);
-      // Migration: Replace old SAR symbol with new one in budget keys
-      if (parsed['⃁']) {
-        parsed['ر.س'] = parsed['⃁'];
-        delete parsed['⃁'];
+      const saved = localStorage.getItem('masrofati_budgets_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed['⃁']) {
+          parsed['ر.س'] = parsed['⃁'];
+          delete parsed['⃁'];
+        }
+        return parsed;
       }
-      return parsed;
+      
+      // Migration from old monthlyBudgets
+      const oldSaved = localStorage.getItem('masrofati_budgets');
+      if (oldSaved) {
+        const oldParsed = JSON.parse(oldSaved);
+        if (oldParsed['⃁']) {
+          oldParsed['ر.س'] = oldParsed['⃁'];
+          delete oldParsed['⃁'];
+        }
+        const migrated: BudgetsData = {};
+        Object.entries(oldParsed).forEach(([currency, val]) => {
+          migrated[currency] = {
+            activeAmount: Number(val) || 0,
+            lastResetDate: new Date(0).toISOString(),
+            cumulativeTotal: Number(val) || 0
+          };
+        });
+        return migrated;
+      }
+      return {};
     } catch (e) {
       return {};
     }
@@ -242,6 +292,39 @@ export default function App() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
 
   // --- Handlers ---
+  useEffect(() => {
+    localStorage.setItem('masrofati_theme_mode', themeMode);
+
+    if (themeMode === 'dark') {
+      setIsDarkMode(true);
+    } else if (themeMode === 'light') {
+      setIsDarkMode(false);
+    } else if (themeMode === 'system') {
+      if (typeof window !== 'undefined' && window.matchMedia) {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        setIsDarkMode(mediaQuery.matches);
+
+        const handleChange = (e: MediaQueryListEvent) => {
+          setIsDarkMode(e.matches);
+        };
+
+        if (mediaQuery.addEventListener) {
+          mediaQuery.addEventListener('change', handleChange);
+        } else {
+          mediaQuery.addListener(handleChange);
+        }
+
+        return () => {
+          if (mediaQuery.removeEventListener) {
+            mediaQuery.removeEventListener('change', handleChange);
+          } else {
+            mediaQuery.removeListener(handleChange);
+          }
+        };
+      }
+    }
+  }, [themeMode]);
+
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -280,8 +363,8 @@ export default function App() {
   }, [tasks]);
 
   useEffect(() => {
-    localStorage.setItem('masrofati_budgets', JSON.stringify(monthlyBudgets));
-  }, [monthlyBudgets]);
+    localStorage.setItem('masrofati_budgets_v2', JSON.stringify(budgetsData));
+  }, [budgetsData]);
 
   // --- Handlers ---
   const toggleGroup = (date: string) => {
@@ -308,10 +391,17 @@ export default function App() {
     if (fromAmt <= 0 || rate <= 0) return;
 
     // Update budgets: Increase the target currency budget to reflect the inflow
-    setMonthlyBudgets(prev => ({
-      ...prev,
-      [exchangeToCurrency]: (prev[exchangeToCurrency] || 0) + toAmt
-    }));
+    setBudgetsData(prev => {
+      const current = prev[exchangeToCurrency] || { activeAmount: 0, lastResetDate: new Date(0).toISOString(), cumulativeTotal: 0 };
+      return {
+        ...prev,
+        [exchangeToCurrency]: {
+          activeAmount: current.activeAmount + toAmt,
+          lastResetDate: new Date().toISOString(),
+          cumulativeTotal: current.cumulativeTotal + toAmt
+        }
+      };
+    });
 
     // Record the exchange
     const exchangeTask: Task = {
@@ -507,11 +597,34 @@ export default function App() {
   };
 
   const setBudget = () => {
-    setMonthlyBudgets(prev => ({
-      ...prev,
-      [analyticsCurrency]: parseFloat(budgetInput) || 0
-    }));
+    const amount = parseFloat(budgetInput) || 0;
+    
+    setBudgetsData(prev => {
+      const current = prev[analyticsCurrency] || { activeAmount: 0, lastResetDate: new Date(0).toISOString(), cumulativeTotal: 0 };
+      return {
+        ...prev,
+        [analyticsCurrency]: {
+          activeAmount: amount,
+          lastResetDate: new Date().toISOString(),
+          cumulativeTotal: current.cumulativeTotal + amount
+        }
+      };
+    });
     setShowBudgetModal(false);
+    setBudgetInput('');
+  };
+
+  const resetCumulativeBudget = () => {
+    setBudgetsData(prev => {
+      const current = prev[analyticsCurrency] || { activeAmount: 0, lastResetDate: new Date(0).toISOString(), cumulativeTotal: 0 };
+      return {
+        ...prev,
+        [analyticsCurrency]: {
+          ...current,
+          cumulativeTotal: 0
+        }
+      };
+    });
   };
 
   const filteredTasks = useMemo(() => {
@@ -646,12 +759,20 @@ export default function App() {
     return count;
   }, [activeTab, searchQuery, filterCategory, filterTag, filterPaymentMethod, minPrice, maxPrice, dateFrom, dateTo]);
 
+  const spentSinceReset = useMemo(() => {
+    const activeBudgetItem = budgetsData[analyticsCurrency] || { activeAmount: 0, lastResetDate: new Date(0).toISOString(), cumulativeTotal: 0 };
+    const resetTime = new Date(activeBudgetItem.lastResetDate).getTime();
+    return tasks
+      .filter(t => t.status === 'completed' && (t.currency || 'ر.ي') === analyticsCurrency)
+      .filter(t => new Date(t.createdAt).getTime() >= resetTime)
+      .reduce((acc, curr) => acc + (curr.price || 0), 0);
+  }, [tasks, budgetsData, analyticsCurrency]);
+
   const progressPercentage = useMemo(() => {
-    const budget = monthlyBudgets[analyticsCurrency];
-    if (!budget) return 0;
-    const spent = chartData.reduce((acc, curr) => acc + curr.amount, 0);
-    return (spent / budget) * 100;
-  }, [chartData, monthlyBudgets, analyticsCurrency]);
+    const activeBudget = budgetsData[analyticsCurrency]?.activeAmount || 0;
+    if (!activeBudget) return 0;
+    return (spentSinceReset / activeBudget) * 100;
+  }, [spentSinceReset, budgetsData, analyticsCurrency]);
 
   const exchangeResultCalculated = useMemo(() => {
     const amt = parseFloat(exchangeFromAmount) || 0;
@@ -710,13 +831,70 @@ export default function App() {
               {isPrivate ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
 
-            <button
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2.5 rounded-xl bg-app-bg border border-app-border text-app-muted hover:text-app-accent transition-colors shadow-sm"
-              aria-label="تغيير المظهر"
-            >
-              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowThemeMenu(!showThemeMenu)}
+                className="p-2.5 rounded-xl bg-app-bg border border-app-border text-app-muted hover:text-app-accent transition-colors shadow-sm flex items-center justify-center"
+                aria-label="تغيير المظهر"
+              >
+                {themeMode === 'light' && <Sun className="w-5 h-5" />}
+                {themeMode === 'dark' && <Moon className="w-5 h-5" />}
+                {themeMode === 'system' && <Laptop className="w-5 h-5" />}
+              </button>
+
+              {showThemeMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40 bg-transparent" 
+                    onClick={() => setShowThemeMenu(false)}
+                  />
+                  <div className="absolute left-0 mt-2 w-48 bg-app-bg dark:bg-app-surface border border-app-border rounded-2xl shadow-xl p-1.5 z-50 flex flex-col gap-1">
+                    <button
+                      onClick={() => {
+                        setThemeMode('light');
+                        setShowThemeMenu(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-black rounded-xl transition-all ${
+                        themeMode === 'light' 
+                          ? 'bg-app-accent text-white' 
+                          : 'text-app-text hover:bg-app-surface dark:hover:bg-app-border/40'
+                      }`}
+                    >
+                      <Sun className="w-4 h-4" />
+                      <span>وضع فاتح</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setThemeMode('dark');
+                        setShowThemeMenu(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-black rounded-xl transition-all ${
+                        themeMode === 'dark' 
+                          ? 'bg-app-accent text-white' 
+                          : 'text-app-text hover:bg-app-surface dark:hover:bg-app-border/40'
+                      }`}
+                    >
+                      <Moon className="w-4 h-4" />
+                      <span>وضع داكن</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setThemeMode('system');
+                        setShowThemeMenu(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs font-black rounded-xl transition-all ${
+                        themeMode === 'system' 
+                          ? 'bg-app-accent text-white' 
+                          : 'text-app-text hover:bg-app-surface dark:hover:bg-app-border/40'
+                      }`}
+                    >
+                      <Laptop className="w-4 h-4" />
+                      <span>تلقائي (حسب النظام)</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             <div className="text-left flex flex-col items-end gap-1">
               <div className="flex items-center gap-1.5 text-app-muted text-[10px] mb-1 justify-end uppercase font-bold whitespace-nowrap">
@@ -800,78 +978,159 @@ export default function App() {
 
             {/* Budget Section */}
             <div className="bg-app-bg dark:bg-app-surface border border-app-border rounded-[32px] p-6 shadow-sm mb-6">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div className="flex items-center gap-2 text-app-text font-bold">
                   <Wallet className="w-5 h-5 text-app-accent" />
-                  <span>الميزانية الشهرية ({getCurrencySymbol(analyticsCurrency)})</span>
+                  <span className="text-base sm:text-lg">إدارة ومراقبة الميزانية ({getCurrencySymbol(analyticsCurrency)})</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button 
                     onClick={() => {
-                      setBudgetInput(monthlyBudgets[analyticsCurrency]?.toString() || '');
+                      setBudgetInput('');
                       setShowBudgetModal(true);
                     }}
-                    className="text-[10px] font-black text-app-accent bg-app-accent/10 py-1.5 px-3 rounded-full hover:bg-app-accent hover:text-white transition-all"
+                    className="flex-1 sm:flex-initial text-xs font-black text-white bg-app-accent py-2 px-4 rounded-xl hover:bg-app-accent/95 transition-all shadow-md shadow-app-accent/15"
                   >
-                    {monthlyBudgets[analyticsCurrency] ? 'تعديل الميزانية' : 'تحديد ميزانية'}
+                    إضافة ميزانية جديدة
                   </button>
+                  {budgetsData[analyticsCurrency]?.cumulativeTotal > 0 && (
+                    <button 
+                      onClick={() => {
+                        if (confirm('هل أنت متأكد من تصفير الميزانية التراكمية لهذه العملة؟')) {
+                          resetCumulativeBudget();
+                        }
+                      }}
+                      className="text-[10px] font-bold text-red-500 bg-red-500/10 py-2 px-3 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                    >
+                      تصفير التراكمي
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {monthlyBudgets[analyticsCurrency] ? (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <p className="text-[10px] font-bold text-app-muted uppercase mb-1">المصروف</p>
-                      <p className="text-xl font-black text-app-text">
-                        {isPrivate ? '••••••' : (chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
-                        <span className="text-xs mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
-                      </p>
+              {budgetsData[analyticsCurrency]?.activeAmount ? (
+                <div className="space-y-6">
+                  {/* Grid for Active vs Cumulative */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Active Budget Card */}
+                    <div className="bg-app-bg dark:bg-app-surface/40 border border-app-border rounded-2xl p-4 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap text-right">
+                          <span className="text-[10px] font-black text-app-accent bg-app-accent/10 px-2.5 py-1 rounded-full uppercase">الدورة الحالية النشطة</span>
+                          {budgetsData[analyticsCurrency]?.lastResetDate && (
+                            <span className="text-[9px] text-app-muted font-bold">
+                              بدأت في: {new Date(budgetsData[analyticsCurrency].lastResetDate).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', numberingSystem: 'latn' })}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-bold text-app-muted mb-1">الميزانية النشطة</p>
+                        <p className="text-2xl font-black text-app-text">
+                          {isPrivate ? '••••••' : budgetsData[analyticsCurrency].activeAmount.toLocaleString('en-US')}
+                          <span className="text-sm mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-app-border/40">
+                        <div>
+                          <p className="text-[9px] font-bold text-app-muted mb-1">المصروف في هذه الدورة</p>
+                          <p className="text-sm font-black text-app-text">
+                            {isPrivate ? '••••••' : spentSinceReset.toLocaleString('en-US')}
+                            <span className="text-[11px] mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
+                          </p>
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[9px] font-bold text-app-muted mb-1">المتبقي من الدورة</p>
+                          <p className={`text-sm font-black ${
+                            budgetsData[analyticsCurrency].activeAmount - spentSinceReset < 0 
+                              ? 'text-red-500 font-black' 
+                              : 'text-emerald-500'
+                          }`}>
+                            {isPrivate ? '••••••' : (budgetsData[analyticsCurrency].activeAmount - spentSinceReset).toLocaleString('en-US')}
+                            <span className="text-[11px] mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-left">
-                      <p className="text-[10px] font-bold text-app-muted uppercase mb-1">المتبقي</p>
-                      <p className={`text-xl font-black ${
-                        monthlyBudgets[analyticsCurrency] - chartData.reduce((acc, curr) => acc + curr.amount, 0) < 0 
-                          ? 'text-red-500 font-black' 
-                          : 'text-emerald-500'
-                      }`}>
-                        {isPrivate ? '••••••' : (monthlyBudgets[analyticsCurrency] - chartData.reduce((acc, curr) => acc + curr.amount, 0)).toLocaleString('en-US')}
-                        <span className="text-xs mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
-                      </p>
+
+                    {/* Cumulative Budget Card */}
+                    <div className="bg-app-bg dark:bg-app-surface/40 border border-app-border rounded-2xl p-4 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-full uppercase">الميزانية التراكمية الإجمالية</span>
+                        </div>
+                        <p className="text-xs font-bold text-app-muted mb-1">إجمالي الميزانية التراكمية</p>
+                        <p className="text-2xl font-black text-app-text">
+                          {isPrivate ? '••••••' : budgetsData[analyticsCurrency].cumulativeTotal.toLocaleString('en-US')}
+                          <span className="text-sm mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-app-border/40">
+                        <div>
+                          <p className="text-[9px] font-bold text-app-muted mb-1">إجمالي جميع المصاريف تاريخياً</p>
+                          <p className="text-sm font-black text-app-text">
+                            {isPrivate ? '••••••' : (totalsByCurrency[analyticsCurrency] || 0).toLocaleString('en-US')}
+                            <span className="text-[11px] mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
+                          </p>
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[9px] font-bold text-app-muted mb-1">رصيد الميزانية التراكمية</p>
+                          <p className={`text-sm font-black ${
+                            budgetsData[analyticsCurrency].cumulativeTotal - (totalsByCurrency[analyticsCurrency] || 0) < 0 
+                              ? 'text-red-500' 
+                              : 'text-emerald-500'
+                          }`}>
+                            {isPrivate ? '••••••' : (budgetsData[analyticsCurrency].cumulativeTotal - (totalsByCurrency[analyticsCurrency] || 0)).toLocaleString('en-US')}
+                            <span className="text-[11px] mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="relative h-4 bg-app-border/30 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ 
-                        width: `${Math.min(100, progressPercentage)}%` 
-                      }}
-                      className={`h-full rounded-full ${
-                        progressPercentage >= 75 
-                          ? 'bg-red-500' 
-                          : progressPercentage >= 55 
-                            ? 'bg-orange-500' 
-                            : 'bg-app-accent'
-                      }`}
-                    />
-                  </div>
-                  
-                  <div className="flex justify-between text-[10px] font-bold text-app-muted">
-                    <span>0%</span>
-                    <span>{Math.round(progressPercentage)}% من الميزانية</span>
-                    <span>100%</span>
-                  </div>
-
-                  {(chartData.reduce((acc, curr) => acc + curr.amount, 0) / monthlyBudgets[analyticsCurrency]) > 1 && (
-                    <div className="bg-red-500/10 text-red-500 p-3 rounded-xl text-xs font-bold text-center border border-red-500/20">
-                      لقد تجاوزت الميزانية المحددة لهذا الشهر!
+                  {/* Progress Indicator for Active Cycle */}
+                  <div className="space-y-2 mt-2">
+                    <div className="relative h-4 bg-app-border/30 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ 
+                          width: `${Math.min(100, progressPercentage)}%` 
+                        }}
+                        className={`h-full rounded-full ${
+                          progressPercentage >= 100 
+                            ? 'bg-red-500' 
+                            : progressPercentage >= 75 
+                              ? 'bg-orange-500' 
+                              : 'bg-app-accent'
+                        }`}
+                      />
                     </div>
-                  )}
+                    
+                    <div className="flex justify-between text-[11px] font-bold text-app-muted">
+                      <span>0%</span>
+                      <span className="text-app-text">{Math.round(progressPercentage)}% من الميزانية النشطة الحالية</span>
+                      <span>100%</span>
+                    </div>
+
+                    {progressPercentage > 100 && (
+                      <div className="bg-red-500/10 text-red-500 p-3 rounded-xl text-xs font-bold text-center border border-red-500/20">
+                        لقد تجاوزت الميزانية النشطة الحالية لهذه الدورة!
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="py-8 text-center bg-app-surface dark:bg-app-border/5 rounded-2xl border border-dashed border-app-border">
-                  <p className="text-xs text-app-muted font-bold">لم تقم بتحديد ميزانية لهذه العملة بعد</p>
+                  <p className="text-xs text-app-muted font-bold mb-3">لم تقم بتحديد ميزانية لهذه العملة بعد</p>
+                  <button 
+                    onClick={() => {
+                      setBudgetInput('');
+                      setShowBudgetModal(true);
+                    }}
+                    className="text-xs font-black text-white bg-app-accent py-2 px-5 rounded-xl hover:bg-app-accent/95 transition-all shadow-md shadow-app-accent/15"
+                  >
+                    إضافة ميزانية للبدء
+                  </button>
                 </div>
               )}
             </div>
@@ -1773,7 +2032,7 @@ export default function App() {
                   <div className="w-10 h-10 bg-app-accent/10 rounded-full flex items-center justify-center">
                     <Wallet className="w-5 h-5 text-app-accent" />
                   </div>
-                  <h3 className="text-xl font-black text-app-text">تحديد ميزانية الشهر</h3>
+                  <h3 className="text-xl font-black text-app-text">إضافة ميزانية جديدة</h3>
                   <button onClick={() => setShowBudgetModal(false)} className="p-2 hover:bg-app-surface rounded-full text-app-muted">
                     <X className="w-5 h-5" />
                   </button>
@@ -1817,7 +2076,7 @@ export default function App() {
                   
                   <div className="bg-app-accent/5 p-4 rounded-2xl border border-app-accent/10">
                     <p className="text-[10px] text-app-muted font-bold leading-relaxed text-center">
-                      سيتم استخدام هذه القيمة لمراقبة مصروفاتك بالـ {getCurrencySymbol(analyticsCurrency)} خلال التقارير.
+                      سيتم إضافة هذا المبلغ إلى ميزانيتك التراكمية، وسيتصفر مؤشر الاستهلاك النشط ليبدأ الاحتساب من جديد بدءاً من هذه اللحظة.
                     </p>
                   </div>
 
