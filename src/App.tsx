@@ -180,6 +180,7 @@ export default function App() {
     return 'light';
   });
   const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedMode = localStorage.getItem('masrofati_theme_mode');
@@ -282,6 +283,7 @@ export default function App() {
     }
   });
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetModalMode, setBudgetModalMode] = useState<'add-new' | 'edit-active' | 'edit-cumulative'>('add-new');
   const [showExchangeModal, setShowExchangeModal] = useState(false);
   const [budgetInput, setBudgetInput] = useState('');
   const [exchangeFromAmount, setExchangeFromAmount] = useState('');
@@ -601,14 +603,32 @@ export default function App() {
     
     setBudgetsData(prev => {
       const current = prev[analyticsCurrency] || { activeAmount: 0, lastResetDate: new Date(0).toISOString(), cumulativeTotal: 0 };
-      return {
-        ...prev,
-        [analyticsCurrency]: {
-          activeAmount: amount,
-          lastResetDate: new Date().toISOString(),
-          cumulativeTotal: current.cumulativeTotal + amount
-        }
-      };
+      if (budgetModalMode === 'edit-active') {
+        return {
+          ...prev,
+          [analyticsCurrency]: {
+            ...current,
+            activeAmount: amount
+          }
+        };
+      } else if (budgetModalMode === 'edit-cumulative') {
+        return {
+          ...prev,
+          [analyticsCurrency]: {
+            ...current,
+            cumulativeTotal: amount
+          }
+        };
+      } else { // 'add-new'
+        return {
+          ...prev,
+          [analyticsCurrency]: {
+            activeAmount: amount,
+            lastResetDate: new Date().toISOString(),
+            cumulativeTotal: current.cumulativeTotal + amount
+          }
+        };
+      }
     });
     setShowBudgetModal(false);
     setBudgetInput('');
@@ -986,6 +1006,7 @@ export default function App() {
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button 
                     onClick={() => {
+                      setBudgetModalMode('add-new');
                       setBudgetInput('');
                       setShowBudgetModal(true);
                     }}
@@ -994,16 +1015,38 @@ export default function App() {
                     إضافة ميزانية جديدة
                   </button>
                   {budgetsData[analyticsCurrency]?.cumulativeTotal > 0 && (
-                    <button 
-                      onClick={() => {
-                        if (confirm('هل أنت متأكد من تصفير الميزانية التراكمية لهذه العملة؟')) {
-                          resetCumulativeBudget();
-                        }
-                      }}
-                      className="text-[10px] font-bold text-red-500 bg-red-500/10 py-2 px-3 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
-                    >
-                      تصفير التراكمي
-                    </button>
+                    <div className="flex items-center gap-1.5 transition-all">
+                      {showConfirmReset ? (
+                        <div className="flex items-center gap-1 bg-red-500/15 border border-red-500/20 rounded-xl p-1 shrink-0">
+                          <span className="text-[10px] font-bold text-red-500 px-1.5 whitespace-nowrap">تأكيد التصفير؟</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              resetCumulativeBudget();
+                              setShowConfirmReset(false);
+                            }}
+                            className="text-[10px] font-black text-white bg-red-500 px-2.5 py-1.5 rounded-lg hover:bg-red-600 transition-colors"
+                          >
+                            نعم
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmReset(false)}
+                            className="text-[10px] font-black text-app-text bg-app-bg dark:bg-app-surface border border-app-border px-2.5 py-1.5 rounded-lg hover:bg-app-border/40 transition-colors"
+                          >
+                            تراجع
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          type="button"
+                          onClick={() => setShowConfirmReset(true)}
+                          className="text-[10px] font-bold text-red-500 bg-red-500/10 py-2 px-3 rounded-xl hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                        >
+                          تصفير التراكمي
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1024,10 +1067,24 @@ export default function App() {
                           )}
                         </div>
                         <p className="text-xs font-bold text-app-muted mb-1">الميزانية النشطة</p>
-                        <p className="text-2xl font-black text-app-text">
-                          {isPrivate ? '••••••' : budgetsData[analyticsCurrency].activeAmount.toLocaleString('en-US')}
-                          <span className="text-sm mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
-                        </p>
+                        <div className="flex items-center justify-between font-bold text-app-muted mb-1">
+                          <p className="text-2xl font-black text-app-text">
+                            {isPrivate ? '••••••' : budgetsData[analyticsCurrency].activeAmount.toLocaleString('en-US')}
+                            <span className="text-sm mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
+                          </p>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setBudgetModalMode('edit-active');
+                              setBudgetInput(budgetsData[analyticsCurrency].activeAmount.toString());
+                              setShowBudgetModal(true);
+                            }}
+                            title="تعديل الميزانية النشطة"
+                            className="p-1.5 hover:bg-app-accent/10 rounded-lg text-app-accent transition-colors flex items-center justify-center border border-transparent hover:border-app-accent/20"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-app-border/40">
@@ -1059,10 +1116,24 @@ export default function App() {
                           <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-full uppercase">الميزانية التراكمية الإجمالية</span>
                         </div>
                         <p className="text-xs font-bold text-app-muted mb-1">إجمالي الميزانية التراكمية</p>
-                        <p className="text-2xl font-black text-app-text">
-                          {isPrivate ? '••••••' : budgetsData[analyticsCurrency].cumulativeTotal.toLocaleString('en-US')}
-                          <span className="text-sm mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-2xl font-black text-app-text">
+                            {isPrivate ? '••••••' : budgetsData[analyticsCurrency].cumulativeTotal.toLocaleString('en-US')}
+                            <span className="text-sm mr-1 opacity-50">{getCurrencySymbol(analyticsCurrency)}</span>
+                          </p>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setBudgetModalMode('edit-cumulative');
+                              setBudgetInput(budgetsData[analyticsCurrency].cumulativeTotal.toString());
+                              setShowBudgetModal(true);
+                            }}
+                            title="تعديل الميزانية التراكمية"
+                            className="p-1.5 hover:bg-amber-500/10 rounded-lg text-amber-500 transition-colors flex items-center justify-center border border-transparent hover:border-amber-500/20"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-app-border/40">
@@ -1124,6 +1195,7 @@ export default function App() {
                   <p className="text-xs text-app-muted font-bold mb-3">لم تقم بتحديد ميزانية لهذه العملة بعد</p>
                   <button 
                     onClick={() => {
+                      setBudgetModalMode('add-new');
                       setBudgetInput('');
                       setShowBudgetModal(true);
                     }}
@@ -2032,7 +2104,13 @@ export default function App() {
                   <div className="w-10 h-10 bg-app-accent/10 rounded-full flex items-center justify-center">
                     <Wallet className="w-5 h-5 text-app-accent" />
                   </div>
-                  <h3 className="text-xl font-black text-app-text">إضافة ميزانية جديدة</h3>
+                  <h3 className="text-xl font-black text-app-text">
+                    {budgetModalMode === 'edit-active' 
+                      ? 'تعديل الميزانية النشطة الحالية' 
+                      : budgetModalMode === 'edit-cumulative' 
+                        ? 'تعديل إجمالي الميزانية التراكمية' 
+                        : 'إضافة ميزانية جديدة'}
+                  </h3>
                   <button onClick={() => setShowBudgetModal(false)} className="p-2 hover:bg-app-surface rounded-full text-app-muted">
                     <X className="w-5 h-5" />
                   </button>
@@ -2076,7 +2154,11 @@ export default function App() {
                   
                   <div className="bg-app-accent/5 p-4 rounded-2xl border border-app-accent/10">
                     <p className="text-[10px] text-app-muted font-bold leading-relaxed text-center">
-                      سيتم إضافة هذا المبلغ إلى ميزانيتك التراكمية، وسيتصفر مؤشر الاستهلاك النشط ليبدأ الاحتساب من جديد بدءاً من هذه اللحظة.
+                      {budgetModalMode === 'edit-active' 
+                        ? 'سيتم تعديل رقم الميزانية النشطة الحالية مباشرة دون تصفير مؤشر الاحتساب أو التأثير على الميزانية التراكمية الإجمالية.' 
+                        : budgetModalMode === 'edit-cumulative' 
+                          ? 'سيتم تعديل إجمالي الميزانية التراكمية مباشرة إلى هذا الرقم دون التأثير على المبلغ والاحتساب بالدورة النشطة.' 
+                          : 'سيتم إضافة هذا المبلغ إلى ميزانيتك التراكمية، وسيتصفر مؤشر الاستهلاك النشط ليبدأ الاحتساب من جديد بدءاً من هذه اللحظة.'}
                     </p>
                   </div>
 
@@ -2091,7 +2173,7 @@ export default function App() {
                       onClick={setBudget}
                       className="bg-app-accent hover:opacity-95 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-app-accent/20 active:scale-95 text-sm"
                     >
-                      تأكيد
+                      {budgetModalMode === 'add-new' ? 'تأكيد الإضافة' : 'تأكيد التعديل'}
                     </button>
                   </div>
                 </div>
